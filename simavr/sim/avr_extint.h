@@ -52,13 +52,16 @@ enum {
 typedef struct avr_extint_t {
 	avr_io_t	io;
 
-	struct {
+	struct avr_eint_i_t {
+                struct avr_extint_t   * owner;  // Back pointer
 		avr_regbit_t	isc[2];		// interrupt sense control bits
 		avr_int_vector_t vector;	// interrupt vector
 
-		uint32_t		port_ioctl;		// ioctl to use to get port
-		uint8_t			port_pin;		// pin number in said port
-		uint8_t			strict_lvl_trig;// enforces a repetitive interrupt triggering while the pin is held low
+		uint32_t		port_ioctl; // ioctl to use to get port
+                avr_irq_t             * port_irq;   // That port/bit's IRQ
+                uint8_t			port_pin;   // pin number in said port
+                uint8_t                 previous_enable;
+                uint8_t                 previous_mode;
 	}	eint[EXTINT_COUNT];
 
 } avr_extint_t;

@@ -1,7 +1,9 @@
+/* -*- mode: C; eval: (setq c-basic-offset 8); -*- (emacs magic) */
 /*
 	avr_extint.c
 
 	Copyright 2008, 2009 Michel Pollet <buserror@gmail.com>
+        Changes copyright 2021 Giles Atkinson
 
  	This file is part of simavr.
 
@@ -26,65 +28,9 @@
 #include "avr_extint.h"
 #include "avr_ioport.h"
 
-typedef struct avr_extint_poll_context_t {
-	uint32_t	eint_no; // index of particular interrupt source we are monitoring
-	avr_extint_t *extint;
-} avr_extint_poll_context_t;
-
-static avr_cycle_count_t avr_extint_poll_level_trig(
-		struct avr_t * avr,
-		avr_cycle_count_t when,
-		void * param)
-{
-	avr_extint_poll_context_t *poll = (avr_extint_poll_context_t *)param;
-	avr_extint_t * p = poll->extint;
-
-        /* Check for change of interrupt mode. */
-
-        if (avr_regbit_get_array(avr, p->eint[poll->eint_no].isc, 2))
-		goto terminate_poll;
-
-        char port = p->eint[poll->eint_no].port_ioctl & 0xFF;
-	avr_ioport_state_t iostate;
-	if (avr_ioctl(avr, AVR_IOCTL_IOPORT_GETSTATE( port ), &iostate) < 0)
-		goto terminate_poll;
-	uint8_t bit = ( iostate.pin >> p->eint[poll->eint_no].port_pin ) & 1;
-	if (bit)
-		goto terminate_poll; // Only poll while pin level remains low
-
-	if (avr->sreg[S_I]) {
-		uint8_t raised = avr_regbit_get(avr, p->eint[poll->eint_no].vector.raised) || p->eint[poll->eint_no].vector.pending;
-		if (!raised)
-			avr_raise_interrupt(avr, &p->eint[poll->eint_no].vector);
-	}
-
-	return when+1;
-
-terminate_poll:
-	free(poll);
-	return 0;
-}
-
-static avr_extint_t * avr_extint_get(avr_t * avr)
-{
-	if (!avr)
-		return NULL;
-	avr_io_t * periferal = avr->io_port;
-	while (periferal) {
-		if (!strcmp(periferal->kind, "extint")) {
-			return (avr_extint_t *)periferal;
-		}
-		periferal = periferal->next;
-	}
-	return NULL;
-}
-
-static inline uint8_t avr_extint_exists(avr_extint_t *extint, int8_t extint_no)
-{
-	return (extint_no < EXTINT_COUNT) && (extint->eint[extint_no].port_ioctl);
-}
-
 /**
+ * Fossil function, retained for backward compatability.
+ *
  * @brief avr_extint_is_strict_lvl_trig
  * @param avr
  * @param extint_no: an ext interrupt number, e.g. 0 or 1 (corresponds to INT0 or INT1)
@@ -93,15 +39,12 @@ static inline uint8_t avr_extint_exists(avr_extint_t *extint, int8_t extint_no)
  */
 int avr_extint_is_strict_lvl_trig(avr_t * avr, uint8_t extint_no)
 {
-	avr_extint_t *p = avr_extint_get(avr);
-	if (!p || !avr_extint_exists(p, extint_no))
-		return -1;
-	if (!p->eint[extint_no].isc[1].reg)
-		return -1; // this is edge-only triggered interrupt
-	return p->eint[extint_no].strict_lvl_trig;
+        return -1;
 }
 
 /**
+ * Fossil function, retained for backward compatability.
+ *
  * @brief avr_extint_set_strict_lvl_trig
  * @param avr
  * @param extint_no: an ext interrupt number, e.g. 0 or 1 (corresponds to INT0 or INT1)
@@ -109,13 +52,40 @@ int avr_extint_is_strict_lvl_trig(avr_t * avr, uint8_t extint_no)
  */
 void avr_extint_set_strict_lvl_trig(avr_t * avr, uint8_t extint_no, uint8_t strict)
 {
-	avr_extint_t *p = avr_extint_get(avr);
-	if (!p || !avr_extint_exists(p, extint_no))
-		return;
-	if (!p->eint[extint_no].isc[1].reg)
-		return; // this is edge-only triggered interrupt
-	p->eint[extint_no].strict_lvl_trig = strict;
 }
+
+/* Get the bit that controls an interrupt. */
+
+static unsigned int avr_extint_get_bit(struct avr_eint_i_t * ip)
+{
+        char               port; 
+	avr_ioport_state_t iostate;
+
+        port = ip->port_ioctl & 0xFF;
+	if (avr_ioctl(ip->owner->io.avr, AVR_IOCTL_IOPORT_GETSTATE(port),
+                      &iostate) < 0) {
+		return 1;
+        }
+	return (iostate.pin >> ip->port_pin) & 1;
+}
+
+/* Raise level-triggered interrupt? */
+
+static void avr_extint_test_level(struct avr_eint_i_t * ip)
+{
+        if (ip->previous_enable && ip->previous_mode &&
+            avr_extint_get_bit(ip) == 0) {
+                /* Low level-triggered is enabled and pin is low.
+                 * TODO/FIX ME this is not really correct and the datasheets
+                 * say that the level-triggered interrupt does not set the
+                 * flag and the interrupt source is monitored continually.
+                 */
+
+                avr_raise_interrupt(ip->owner->io.avr, &ip->vector);
+        }
+}
+
+/* New value for a controlling I/O port bit. */
 
 static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value, void * param)
 {
@@ -135,31 +105,7 @@ static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value, void *
 
 	switch (mode) {
 		case 0: // Level triggered (low level) interrupt
-			{
-				/**
-				  Datasheet excerpt:
-					>When the external interrupt is enabled and is configured as level triggered (only INT0/INT1),
-					>the interrupt will trigger as long as the pin is held low.
-					Thus we have to query the pin value continiously while it's held low and try to trigger the interrupt.
-					This can be expensive, so avr_extint_set_strict_lvl_trig function provisioned to allow the user
-					to turn this feature off. In this case bahaviour will be similar to the falling edge interrupt.
-				 */
-				if (!value) {
-					if (avr->sreg[S_I]) {
-						uint8_t raised = avr_regbit_get(avr, p->eint[irq->irq].vector.raised) || p->eint[irq->irq].vector.pending;
-						if (!raised)
-							avr_raise_interrupt(avr, &p->eint[irq->irq].vector);
-					}
-					if (p->eint[irq->irq].strict_lvl_trig) {
-						avr_extint_poll_context_t *poll = malloc(sizeof(avr_extint_poll_context_t));
-						if (poll) {
-							poll->eint_no = irq->irq;
-							poll->extint = p;
-							avr_cycle_timer_register(avr, 1, avr_extint_poll_level_trig, poll);
-						}
-					}
-				}
-			}
+                        avr_extint_test_level(p->eint + irq->irq);
 			break;
 		case 1: // Toggle-triggered interrupt
 			if (up || down)
@@ -176,20 +122,115 @@ static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value, void *
 	}
 }
 
+/* The interrupt is starting or returning. */
+
+static void avr_extint_interrupt_notify(struct avr_irq_t * irq,
+                                        uint32_t value, void * param)
+{
+        struct avr_eint_i_t * ip = (struct avr_eint_i_t *)param;
+
+        if (value == 0) {
+                // Interrupt is returning, retrigger?
+
+                avr_extint_test_level(ip);
+        }
+}
+
+/* The level-triggered interrupt has been enabled. */
+
+static void avr_extint_LT_enabled(struct avr_eint_i_t * ip)
+{
+        /* Watch the interrupt so that it can be re-triggered when the
+         * interrupt handler returns.
+         *
+         * TODO/FIX ME this is not really correct and the datasheets
+         * say that the level-triggered interrupt does not set the
+         * flag and the interrupt source is monitored continually.
+         * It really its own code in the core.
+         */
+
+        avr_irq_register_notify(ip->vector.irq + AVR_INT_IRQ_RUNNING,
+                                avr_extint_interrupt_notify, ip);
+
+        // Check the pin
+
+        if (avr_extint_get_bit(ip) == 0)
+                avr_raise_interrupt(ip->owner->io.avr, &ip->vector);
+}
+
+/* An enable or control bit has changed. */
+
+static void avr_exint_status_change(struct avr_t  * avr,
+                                    avr_io_addr_t   addr,
+                                    uint8_t         v,
+                                    void          * param)
+{
+	avr_extint_t * p = (avr_extint_t *)param;
+
+   printf("In avr_exint_status_change addr = %x value = %02x\n", addr, v);
+	avr_core_watch_write(avr, addr, v);
+	for (int i = 0; i < EXTINT_COUNT; i++) {
+                uint8_t              enable, mode;
+                struct avr_eint_i_t * ip = p->eint + i;
+
+		if (!ip->port_ioctl)
+                        return;
+                enable = avr_regbit_get(avr, ip->vector.enable);
+                mode = avr_regbit_get_array(avr, ip->isc, 2);
+                printf("i = %d enable %d->%d mode %d->%d\n", i, ip->previous_enable, enable, ip->previous_mode, mode);
+                if (!ip->isc[1].reg)
+                        mode += 2;
+                if (enable != ip->previous_enable) {
+                        if (enable) {
+                                // Watch the pin.
+
+  printf("i = %d connecting irq %d\n", i, ip->port_irq->irq);
+                                avr_connect_irq(ip->port_irq, p->io.irq + i);
+                                if (mode == 0)
+                                        avr_extint_LT_enabled(ip);
+                        } else {
+                                // Forget the pin.
+
+                                avr_unconnect_irq(ip->port_irq, p->io.irq + i);
+                                if (ip->previous_mode == 0) {
+                                        // Forget the interrupt
+
+                                        avr_irq_unregister_notify(
+                                          ip->vector.irq + AVR_INT_IRQ_RUNNING,
+                                          avr_extint_interrupt_notify, ip);
+                                }
+                        }
+                } else if (enable && mode != ip->previous_mode) {
+                        if (ip->previous_mode == 0) {
+                                // Forget the interrupt
+
+                                avr_irq_unregister_notify(
+                                    ip->vector.irq + AVR_INT_IRQ_RUNNING,
+                                    avr_extint_interrupt_notify, ip);
+                        } else if (mode == 0) {
+                                avr_extint_LT_enabled(ip);
+                        }
+                }
+                ip->previous_enable = enable;
+                ip->previous_mode = mode;
+        }
+}
+
 static void avr_extint_reset(avr_io_t * port)
 {
 	avr_extint_t * p = (avr_extint_t *)port;
 
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-		if (p->eint[i].port_ioctl) {
-                        avr_irq_register_notify(p->io.irq + i, avr_extint_irq_notify, p);
+                struct avr_eint_i_t * ip = p->eint + i;
 
-			if (p->eint[i].isc[1].reg) // level triggering available
-				p->eint[i].strict_lvl_trig = 1; // turn on repetitive level triggering by default
-			avr_irq_t * irq = avr_io_getirq(p->io.avr,
-					p->eint[i].port_ioctl, p->eint[i].port_pin);
-
-			avr_connect_irq(irq, p->io.irq + i);
+		if (ip->port_ioctl) {
+                        avr_irq_register_notify(p->io.irq + i,
+                                                avr_extint_irq_notify, p);
+                        ip->port_irq = avr_io_getirq(p->io.avr,
+                                                     ip->port_ioctl,
+                                                     ip->port_pin);
+			if (!ip->isc[1].reg)
+                                ip->previous_mode = 2;
 		}
 	}
 }
@@ -217,10 +258,65 @@ void avr_extint_init(avr_t * avr, avr_extint_t * p)
 
 	avr_register_io(avr, &p->io);
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-                if (!p->eint[i].port_ioctl)
+                struct avr_eint_i_t * ip = p->eint + i;
+                int                   j;
+
+                if (!ip->port_ioctl)
                      break;
-		avr_register_vector(avr, &p->eint[i].vector);
+                ip->owner = p;
+		avr_register_vector(avr, &ip->vector);
+
+                // Watch enable registers - only once.
+
+                for (j = 0; j < i; j++) {
+                        if (p->eint[j].vector.enable.reg ==
+                            ip->vector.enable.reg) {
+                                // Already registered.
+
+                                break;
+                        }
+                }
+                if (i == j) {
+                        avr_register_io_write(avr,
+                                              ip->vector.enable.reg,
+                                              avr_exint_status_change, p);
+                }
+
+                // Watch control registers - only once.
+        
+                for (j = 0; j < i; j++) {
+                        if (p->eint[j].isc[0].reg == ip->isc[0].reg ||
+                            p->eint[j].isc[1].reg == ip->isc[0].reg) {
+                                // Already registered.
+
+                                break;
+                        }
+                }
+                if (i == j) {
+                        avr_register_io_write(avr, ip->isc[0].reg,
+                                              avr_exint_status_change, p);
+                }
+                if (ip->isc[1].reg &&
+                    ip->isc[1].reg != ip->isc[0].reg) {
+                        for (j = 0; j < i; j++) {
+                                if ((p->eint[j].isc[0].reg ==
+                                     ip->isc[1].reg) ||
+                                    (p->eint[j].isc[1].reg ==
+                                     ip->isc[1].reg)) {
+                                        // Already registered.
+
+                                        break;
+                                }
+                        }
+                        if (i == j) {
+                                avr_register_io_write(avr,
+                                                      ip->isc[0].reg,
+                                                      avr_exint_status_change,
+                                                      p);
+                        }
+                }
         }
+
 	// allocate this module's IRQ
 
 	avr_io_setirqs(&p->io, AVR_IOCTL_EXTINT_GETIRQ(), EXTINT_COUNT, NULL);
