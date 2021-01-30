@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sim_hex.h"
+#include "sim_elf.h"
 
 // friendly hex dump
 void hdump(const char *w, uint8_t *b, size_t l)
@@ -189,7 +190,68 @@ read_ihex_file(
 	return res;
 }
 
+/* Load a firmware file, ELF or HEX format, from filename, based at
+ * loadBase, returning the data in *fp ready for loading into
+ * the simulated MCU. Argument hex_ok indicates that the MCU device
+ * and frequency are supplied elsewhere, so a HEX file is acceptable,
+ * while progname is the current program name for error messages.
+ *
+ * Included here as it mostly specific to HEX files.
+ */
 
+void
+avr_setup_firmware(const char * filename, uint32_t loadBase,
+                   elf_firmware_t * fp, int hex_ok, const char * progname)
+{
+        char * suffix = strrchr(filename, '.');
+
+        if (suffix && !strcasecmp(suffix, ".hex")) {
+                if (!hex_ok) {
+                        fprintf(stderr,
+                                "%s: -mcu and -freq are mandatory "
+                                "to load .hex files\n",
+                                progname);
+                        exit(1);
+                }
+                ihex_chunk_p chunk = NULL;
+                int cnt = read_ihex_chunks(filename, &chunk);
+                if (cnt <= 0) {
+                        fprintf(stderr,
+                                "%s: Unable to load IHEX file %s\n",
+                                progname, filename);
+                        exit(1);
+                }
+                printf("Loaded %d section of ihex\n", cnt);
+
+                for (int ci = 0; ci < cnt; ci++) {
+                        if (chunk[ci].baseaddr < (1*1024*1024)) {
+                                fp->flash = chunk[ci].data;
+                                fp->flashsize = chunk[ci].size;
+                                fp->flashbase = chunk[ci].baseaddr;
+                                printf("Load HEX flash %08x, " "%d\n",
+                                       fp->flashbase, fp->flashsize);
+                        } else if (chunk[ci].baseaddr >=
+                                   AVR_SEGMENT_OFFSET_EEPROM ||
+                                   (chunk[ci].baseaddr + loadBase) >=
+                                        AVR_SEGMENT_OFFSET_EEPROM) {
+                                // eeprom!
+
+                                fp->eeprom = chunk[ci].data;
+                                fp->eesize = chunk[ci].size;
+                                printf("Load HEX eeprom %08x, %d\n",
+                                       chunk[ci].baseaddr,
+                                       fp->eesize);
+                        }
+                }
+        } else {
+                if (elf_read_firmware(filename, fp) == -1) {
+                        fprintf(stderr,
+                                "%s: Unable to load firmware from file %s\n",
+                                progname, filename);
+                        exit(1);
+                }
+        }
+}
 
 #ifdef IHEX_TEST
 // gcc -std=gnu99 -Isimavr/sim simavr/sim/sim_hex.c -o sim_hex -DIHEX_TEST -Dtest_main=main
