@@ -34,6 +34,8 @@
 
 #include "sim_core_decl.h"
 
+extern int Run_with_panel(avr_t *avr);
+
 static void
 display_usage(
 	const char * app)
@@ -43,9 +45,10 @@ display_usage(
          "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
 	 "       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
 	 "       [--list-cores]      List all supported AVR cores and exit\n"
-	 "       [--help|-h]         Display this usage message and exit\n"
+	 "       [--help|-h|-?]      Display this usage message and exit\n"
 	 "       [--trace, -t]       Run full scale decoder trace\n"
 	 "       [-ti <vector>]      Add traces for IRQ vector <vector>\n"
+         "       [--panel|-p]        Show control panel\n"
 	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
                 "(default 1234)\n"
 	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
@@ -97,6 +100,7 @@ main(
 	int trace = 0;
 	int gdb = 0;
 	int log = 1;
+        int panel = 0;
 	int port = 1234;
         char name[24] = "";
 	uint32_t loadBase = AVR_SEGMENT_OFFSET_FLASH;
@@ -218,6 +222,9 @@ main(
 			if (pi < argc-1)
 				trace_vectors[trace_vectors_count++] =
                                         atoi(argv[++pi]);
+		} else if (!strcmp(argv[pi], "-p") ||
+                           !strcmp(argv[pi], "--panel")) {
+			panel = 1;
 		} else if (!strcmp(argv[pi], "-g") ||
                            !strcmp(argv[pi], "--gdb")) {
 			gdb++;
@@ -281,11 +288,18 @@ main(
 	signal(SIGINT, sig_int);
 	signal(SIGTERM, sig_int);
 
-	for (;;) {
-		int state = avr_run(avr);
-		if (state == cpu_Done || state == cpu_Crashed)
-			break;
-	}
+        if (panel) {
+                // Panel has its own run loop.
 
+                if (!Run_with_panel(avr))
+                        fprintf(stderr, "%s: Failed: Could not show panel.\n",
+                                argv[0]);
+        } else {
+                for (;;) {
+                        int state = avr_run(avr);
+                        if (state == cpu_Done || state == cpu_Crashed)
+                                break;
+                }
+	}
 	avr_terminate(avr);
 }
