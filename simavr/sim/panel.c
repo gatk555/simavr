@@ -36,24 +36,75 @@ static struct blink_functs *Bfp;
 
 /* Data structures to track the simulated MCU's I/O ports. */
 
+#define HANDLES_PER_PORT 2
+
 struct port {
-    avr_t      *avr;
-    avr_irq_t  *base_irq;
-    char        port_letter;
-    uint8_t     output, ddr, input;
+    avr_t       *avr;
+    avr_irq_t   *base_irq;
+    char         port_letter;
+    uint8_t      output, ddr, actual;
+    uint8_t      sor;                                   // Stop indicator.
+    struct port *handle_finder[HANDLES_PER_PORT];       // See push_val().
 };
 
-/* Handles for Blink. */
+static int Burst_preset;                                // For stop/start
+
+/* Blink uses this to control running of the simulator. */
+
+static struct run_control Brc;
+
+/* Blink handles associated with ports. */
+
+#define PORT_HANDLE(pp, i) (pp->handle_finder + i)
+
+#define SOR     1       // Stop on read
+
+/* Handles for non-port Blink items. */
 
 #define PC_handle     ((Sim_RH)1)
 #define Cycles_handle ((Sim_RH)2)
+
+/* Notification of reading from a port.  Enabled for Stop on Read. */
+
+static avr_cycle_count_t burst_complete(struct avr_t      *avr,
+                                        avr_cycle_count_t  when,
+                                        void              *param);
+
+static void d_read_notify(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    struct port *pp;
+
+    pp = (struct port *)param;
+
+    /* This cancels the previous end-of-burst callback and re-schedules it
+     * for immediate execution.  That stops simavr from running.
+     */
+
+    avr_cycle_timer_register(pp->avr, 0, burst_complete, NULL);
+
+    /* Tell UI. */
+
+    Bfp->stopped();                             /* Notify UI. */
+    Bfp->new_flags(PORT_HANDLE(pp, SOR), 1);    /* Change lamp colour. */
+
+    /* Get next execution burst from Blink. */
+
+    do
+        Bfp->run_control(&Brc);
+    while (Brc.burst == 0);
+    Burst_preset = 1;
+
+    /* Revert SoR control lamp colour. */
+
+    Bfp->new_flags(PORT_HANDLE(pp, SOR), 0);    /* Change lamp colour. */
+}
 
 /* Notification of output to a port. This is called whenever the output
  * or data direction registers are written.  Writing to the input register
  * to toggle output register bits is handled internally by simavr
  * and appears as an output register change.
  *
- * New outputs are calculated ignoring pullups, including simavr's
+ * New pin values are calculated ignoring pullups, including simavr's
  * external pullup feature - the panel provides "strong" inputs.
  */
 
@@ -64,34 +115,22 @@ static void d_out_notify(struct avr_irq_t *irq, uint32_t value, void *param)
 
     pp = (struct port *)param;
     if (irq->irq == IOPORT_IRQ_DIRECTION_ALL) {
-        Bfp->new_flags(pp, ~value);
+        Bfp->new_flags(PORT_HANDLE(pp, 0), ~value);
         ddr = pp->ddr = (uint8_t)value;
         out = pp->output;
     } else {
         ddr = pp->ddr;
         out = pp->output = (uint8_t)value;
     }
-    Bfp->new_value(pp, (out & ddr) | (pp->input & ~ddr));
+    pp->actual = (out & ddr) | (pp->actual & ~ddr);
+    Bfp->new_value(PORT_HANDLE(pp, 0), pp->actual);
 }
 
-/* Function called by Blink with new input values. */
-
-int push_val(Sim_RH handle, unsigned int value)
+static void port_input(struct port *pp, unsigned int value)
 {
-    struct port  *pp;
     unsigned int  changed, mask, dirty, i;
 
-    if ((uintptr_t)handle <= 'Z') {
-        /* Attempt to change PC or DDR. Ignore.  FIX ME */
-
-        if (handle == PC_handle)
-            fprintf(stderr, "Changed PC!\n");
-        else
-            fprintf(stderr, "Changed DDR%c!\n", (int)(uintptr_t)handle);
-        return 0;
-    }
-    pp = (struct port *)handle;
-    changed = value ^ pp->input;
+    changed = value ^ pp->actual;
     if (changed) {
         /* Scan for changed bits. */
 
@@ -121,17 +160,58 @@ int push_val(Sim_RH handle, unsigned int value)
             /* Rare. Do not try to correct this: deadlock danger. */
 
             fprintf(stderr,
-                    "Dirty write %02x to port %c (DDR %02x input %02x).",
-                    value, pp->port_letter, pp->ddr, pp->input);
+                    "Dirty write %02x to port %c (DDR %02x actual %02x).",
+                    value, pp->port_letter, pp->ddr, pp->actual);
         }
-        pp->input = value;
+        pp->actual = value;
+    }
+}
+
+/* Function called by Blink with new input values. */
+
+int push_val(Sim_RH handle, unsigned int value)
+{
+    struct port  *pp, **ppp;
+    unsigned int  handle_type;
+
+    if ((uintptr_t)handle <= 'Z') {
+        /* Attempt to change PC or DDR. Ignore.  FIX ME */
+
+        if (handle == PC_handle)
+            fprintf(stderr, "Changed PC!\n");
+        else
+            fprintf(stderr, "Changed cycle count!\n");
+        return 0;
+    }
+
+    /* Other handles are associated with a port. */
+
+    ppp = (struct port **)handle;
+    pp = *ppp;
+    handle_type = ppp - pp->handle_finder;
+    switch (handle_type) {
+    case 0:
+        /* New input value for port. */
+
+        port_input(pp, value);
+        break;
+    case SOR:
+        /* Stop on read. */
+
+        if (value && !pp->sor) {
+            avr_irq_register_notify(pp->base_irq + IOPORT_IRQ_REG_PIN,
+                                    d_read_notify, pp);
+            pp->sor = 1;
+        } else if (!value && pp->sor) {
+            avr_irq_unregister_notify(pp->base_irq + IOPORT_IRQ_REG_PIN,
+                                      d_read_notify, pp);
+            pp->sor = 0;
+        }
+        break;
     }
     return 0;
 }
 
-/* Blink uses this to control running of the simulator. */
-
-static struct run_control Brc;
 static int burst_done;
 
 /* The simulator calls back here after each burst of execution. */
@@ -187,11 +267,16 @@ static int my_avr_run(avr_t *avr)
 
 static void port_reg(char port_letter, struct port *pp)
 {
-        char       name_buff[8];
+    Blink_RH   row;
+    char       name_buff[8];
 
-        sprintf(name_buff, "PORT%c", port_letter);
-        Bfp->new_register(name_buff, pp, 8, RO_SENSITIVITY | RO_ALT_COLOURS);
-        Bfp->new_flags(pp, 0xff);  /* Default case as flags are inverted. */
+    sprintf(name_buff, "PORT%c", port_letter);
+    row = Bfp->new_row(name_buff);
+    Bfp->add_register(name_buff, PORT_HANDLE(pp, 0), 8,
+                      RO_SENSITIVITY | RO_ALT_COLOURS, row);
+    Bfp->add_register("SoR", PORT_HANDLE(pp, SOR), 1, RO_ALT_COLOURS, row);
+    Bfp->close_row(row);
+    Bfp->new_flags(PORT_HANDLE(pp, 0), 0xff);  /* All inputs - inverted. */
 }
 
 /* Set-up for the Blink panel library in run_avr.
@@ -228,13 +313,12 @@ int Run_with_panel(avr_t *avr)
         return 0;
     }
 
-    if (!Bfp->init((struct simulator_calls *)&blink_callbacks))
+    if (!Bfp->init("simavr", (struct simulator_calls *)&blink_callbacks))
         return 0;
 
-    /* Display simulated PC. */
+    /* Display simulated PC and cycle count. */
 
-//    Bfp->new_register("PC", (Sim_RH)1, 16, RO_INSENSITIVE);
-    row = Bfp->new_row("PC/Cycles");
+    row = Bfp->new_row("AVR");
     Bfp->add_register("Cycles", Cycles_handle, 32,
                       RO_INSENSITIVE | RO_STYLE_DECIMAL, row);
     Bfp->add_register("PC", PC_handle, 20,
@@ -245,7 +329,7 @@ int Run_with_panel(avr_t *avr)
 
     for (port_letter = 'A'; port_letter <= 'Z'; ++port_letter) {
         avr_irq_t *base_irq;
-        uint32_t   ioctl;
+        uint32_t   ioctl, i;
 
         ioctl = (uint32_t)AVR_IOCTL_IOPORT_GETIRQ(port_letter);
         base_irq = avr_io_getirq(avr, ioctl, 0);
@@ -259,12 +343,14 @@ int Run_with_panel(avr_t *avr)
             pp->avr = avr;
             pp->base_irq = base_irq;
             pp->port_letter = port_letter;
+            for (i = 0; i < HANDLES_PER_PORT; ++i)      // See push_val().
+                pp->handle_finder[i] = pp;
             avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PORT,
                                     d_out_notify, pp);
             avr_irq_register_notify(base_irq + IOPORT_IRQ_DIRECTION_ALL,
                                     d_out_notify, pp);
 #if 0
-            avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PIN,
+            avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN_ALL,
                                     d_in_notify, pp);
 #endif
 
@@ -276,9 +362,15 @@ int Run_with_panel(avr_t *avr)
     }
 
     do {
-        do
-            Bfp->run_control(&Brc);
-        while (Brc.burst == 0);
+        if (Burst_preset) {
+            Burst_preset = 0;
+        } else {
+            /* Get next execution burst from Blink. */
+
+            do
+                Bfp->run_control(&Brc);
+            while (Brc.burst == 0);
+        }
 
         /* Request callback on cycles performed. */
 
