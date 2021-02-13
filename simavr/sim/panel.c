@@ -1,5 +1,6 @@
 /*
-	panel.c: connect simavr to the Blink panel library.
+	panel.c: connect simavr to the Blink panel library
+        and show a control panel for the simulation.
 
 	Copyright 2021 Giles Atkinson
 
@@ -29,10 +30,7 @@
 #include "sim_irq.h"
 #include "sim_cycle_timers.h"
 #include "avr_ioport.h"
-
-/* Blink library function table. */
-
-static struct blink_functs *Bfp;
+#include "avr_adc.h"
 
 /* Data structures to track the simulated MCU's I/O ports. */
 
@@ -47,11 +45,27 @@ struct port {
     struct port *handle_finder[HANDLES_PER_PORT];       // See push_val().
 };
 
-static int Burst_preset;                                // For stop/start
-
-/* Blink uses this to control running of the simulator. */
+/* Blink uses these to control running of the simulator. */
 
 static struct run_control Brc;
+static int Burst_preset;                                // For stop/start
+
+/* Blink library function table and initialisation argument. */
+
+static struct blink_functs *Bfp;
+
+static int push_val(Sim_RH handle, unsigned int value);
+static const struct simulator_calls blink_callbacks =
+    {.sim_push_val = push_val};
+
+/* For ADC input. */
+
+#define ADC_CHANNEL_COUNT 16
+
+static avr_irq_t   *ADC_base_irq;
+static int          ADC_sor;
+static unsigned int ADC_update_chan = ADC_CHANNEL_COUNT;
+static Sim_RH       ADC_update_handle;
 
 /* Blink handles associated with ports. */
 
@@ -61,42 +75,101 @@ static struct run_control Brc;
 
 /* Handles for non-port Blink items. */
 
-#define PC_handle     ((Sim_RH)1)
-#define Cycles_handle ((Sim_RH)2)
+#define PC_handle            ((Sim_RH)1)
+#define Cycles_handle        ((Sim_RH)2)
+#define ADC_input_1_handle   ((Sim_RH)3)
+#define ADC_channel_1_handle ((Sim_RH)4)
+#define ADC_input_2_handle   ((Sim_RH)5)
+#define ADC_channel_2_handle ((Sim_RH)6)
+#define ADC_SOR_handle       ((Sim_RH)7)
 
-/* Notification of reading from a port.  Enabled for Stop on Read. */
+/* Ask Blink for the number of cycles to simulate. */
+
+static void get_next_burst(void)
+{
+    do {
+        Bfp->run_control(&Brc);
+        if (ADC_update_chan < ADC_CHANNEL_COUNT) {
+            uint32_t  input;
+
+            /* Deferred ADC channel update. */
+
+            input = ADC_base_irq[ADC_update_chan].value;
+            Bfp->new_value(ADC_update_handle, input);
+            ADC_update_chan = ADC_CHANNEL_COUNT; // Sentinel value.
+        }
+    } while (Brc.burst == 0);
+}
+
+/* Stop the simulation when some event occurs.  Argument is the
+ * local handle for the control button for the cause of the stop.
+ */
 
 static avr_cycle_count_t burst_complete(struct avr_t      *avr,
                                         avr_cycle_count_t  when,
                                         void              *param);
+
+static void stop_on_event(avr_t *avr, Sim_RH button)
+{
+    /* This cancels the previous end-of-burst callback and re-schedules it
+     * for immediate execution.  That stops simavr from running.
+     */
+
+    avr_cycle_timer_register(avr, 0, burst_complete, NULL);
+
+    /* Tell UI. */
+
+    Bfp->stopped();                             /* Notify UI. */
+    Bfp->new_flags(button, 1);                  /* Change lamp colour. */
+
+    /* Get next execution burst from Blink. */
+
+    get_next_burst();
+    Burst_preset = 1;
+
+    /* Revert SoR control lamp colour. */
+
+    Bfp->new_flags(button, 0);                  /* Change lamp colour. */
+}
+
+/* Notification of reading from a GPIO port.  Enabled for Stop on Read. */
 
 static void d_read_notify(struct avr_irq_t *irq, uint32_t value, void *param)
 {
     struct port *pp;
 
     pp = (struct port *)param;
+    stop_on_event(pp->avr, PORT_HANDLE(pp, SOR));
+}
 
-    /* This cancels the previous end-of-burst callback and re-schedules it
-     * for immediate execution.  That stops simavr from running.
-     */
+/* ADC input is being read. */
 
-    avr_cycle_timer_register(pp->avr, 0, burst_complete, NULL);
+static void adc_read_notify(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    union {
+        avr_adc_mux_t mux;
+        uint32_t      v;
+    }         e;
+    uint32_t  channel, input;
 
-    /* Tell UI. */
+    /* Show the channel(s) being read and current value(s). */
 
-    Bfp->stopped();                             /* Notify UI. */
-    Bfp->new_flags(PORT_HANDLE(pp, SOR), 1);    /* Change lamp colour. */
+    e.v = value;
+    channel = e.mux.src;
+    Bfp->new_value(ADC_channel_1_handle, channel);
+    input = ADC_base_irq[channel].value;
+    Bfp->new_value(ADC_input_1_handle, input);
 
-    /* Get next execution burst from Blink. */
+    channel = e.mux.diff;
+    Bfp->new_value(ADC_channel_2_handle, channel);
+    input = ADC_base_irq[channel].value;
+    Bfp->new_value(ADC_input_2_handle, input);
 
-    do
-        Bfp->run_control(&Brc);
-    while (Brc.burst == 0);
-    Burst_preset = 1;
+    if (ADC_sor) {
+        /* Stop so that the entries can be changed. */
 
-    /* Revert SoR control lamp colour. */
-
-    Bfp->new_flags(PORT_HANDLE(pp, SOR), 0);    /* Change lamp colour. */
+        stop_on_event((avr_t *)param, ADC_SOR_handle);
+    }
 }
 
 /* Notification of output to a port. This is called whenever the output
@@ -125,6 +198,8 @@ static void d_out_notify(struct avr_irq_t *irq, uint32_t value, void *param)
     pp->actual = (out & ddr) | (pp->actual & ~ddr);
     Bfp->new_value(PORT_HANDLE(pp, 0), pp->actual);
 }
+
+/* New port bits from Blink. */
 
 static void port_input(struct port *pp, unsigned int value)
 {
@@ -169,19 +244,52 @@ static void port_input(struct port *pp, unsigned int value)
 
 /* Function called by Blink with new input values. */
 
-int push_val(Sim_RH handle, unsigned int value)
+static int push_val(Sim_RH handle, unsigned int value)
 {
     struct port  *pp, **ppp;
-    unsigned int  handle_type;
+    uintptr_t     handle_type;
 
-    if ((uintptr_t)handle <= 'Z') {
-        /* Attempt to change PC or DDR. Ignore.  FIX ME */
+    handle_type = (uintptr_t)handle;
+    if (handle_type <= 'Z') {
+        static int adc_chan_1, adc_chan_2;
 
-        if (handle == PC_handle)
+        switch (handle_type) {
+        case 1:
             fprintf(stderr, "Changed PC!\n");
-        else
+            break;
+        case 2:
             fprintf(stderr, "Changed cycle count!\n");
-        return 0;
+            break;
+        case 3:
+            avr_raise_irq(ADC_base_irq + adc_chan_1, value);
+            break;
+        case 4:
+            if (value < ADC_CHANNEL_COUNT) {
+                adc_chan_1 = value;
+                ADC_update_chan = value;
+                ADC_update_handle = ADC_input_1_handle;
+            }
+            break;
+        case 5:
+            avr_raise_irq(ADC_base_irq + adc_chan_2, value);
+            break;
+        case 6:
+            if (value < ADC_CHANNEL_COUNT) {
+                adc_chan_2 = value;
+                ADC_update_chan = value;
+                ADC_update_handle = ADC_input_2_handle;
+            }
+            break;
+        case 7:
+            /* Stop on read. */
+
+            ADC_sor = value;
+            break;
+        }
+
+        /* Immediate return from Blink_run_control() if ADC channel changed.*/
+
+        return ADC_update_chan < ADC_CHANNEL_COUNT;
     }
 
     /* Other handles are associated with a port. */
@@ -279,12 +387,24 @@ static void port_reg(char port_letter, struct port *pp)
     Bfp->new_flags(PORT_HANDLE(pp, 0), 0xff);  /* All inputs - inverted. */
 }
 
-/* Set-up for the Blink panel library in run_avr.
+static void show_adc(void)
+{
+    Blink_RH   row;
+
+    row = Bfp->new_row("ADC");
+    Bfp->add_register("mV", ADC_input_2_handle, 13, RO_STYLE_DECIMAL, row);
+    Bfp->add_register("Channel -", ADC_channel_2_handle, 4,
+                      RO_STYLE_SPIN, row);
+    Bfp->add_register("mV", ADC_input_1_handle, 13, RO_STYLE_DECIMAL, row);
+    Bfp->add_register("Channel +", ADC_channel_1_handle, 4,
+                      RO_STYLE_SPIN, row);
+    Bfp->add_register("SoR", ADC_SOR_handle, 1, RO_ALT_COLOURS, row);
+    Bfp->close_row(row);
+}
+
+/* Set-up the Blink panel library in run_avr, and run the simulator.
  * Return 0 on failure, 1 for success.
  */
-
-static const struct simulator_calls blink_callbacks =
-    {.sim_push_val = push_val};
 
 int Run_with_panel(avr_t *avr)
 {
@@ -358,8 +478,16 @@ int Run_with_panel(avr_t *avr)
 
             port_reg(port_letter, pp);
         }
-        /* Do analogue input read.  FIX ME. */
     }
+
+    /* ADC set-up. */
+
+    ADC_base_irq = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, 0);
+    avr_irq_register_notify(ADC_base_irq + ADC_IRQ_OUT_TRIGGER,
+                            adc_read_notify, avr);
+    show_adc();
+
+    /* Run. */
 
     do {
         if (Burst_preset) {
@@ -367,9 +495,7 @@ int Run_with_panel(avr_t *avr)
         } else {
             /* Get next execution burst from Blink. */
 
-            do
-                Bfp->run_control(&Brc);
-            while (Brc.burst == 0);
+            get_next_burst();
         }
 
         /* Request callback on cycles performed. */
