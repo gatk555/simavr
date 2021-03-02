@@ -1,3 +1,4 @@
+/* -*- mode: C; eval: (setq c-basic-offset 8); -*- (emacs magic) */
 /*
 	run_avr.c
 
@@ -33,27 +34,34 @@
 
 #include "sim_core_decl.h"
 
+extern int Run_with_panel(avr_t *avr);
+
 static void
 display_usage(
 	const char * app)
 {
 	printf("Usage: %s [...] <firmware>\n", app);
-	printf( "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
-			"       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
-			"       [--list-cores]      List all supported AVR cores and exit\n"
-			"       [--help|-h]         Display this usage message and exit\n"
-			"       [--trace, -t]       Run full scale decoder trace\n"
-			"       [-ti <vector>]      Add traces for IRQ vector <vector>\n"
-			"       [--gdb|-g [<port>]] Listen for gdb connection on <port> (default 1234)\n"
-			"       [-ff <.hex file>]   Load next .hex file as flash\n"
-			"       [-ee <.hex file>]   Load next .hex file as eeprom\n"
-			"       [--input|-i <file>] A vcd file to use as input signals\n"
-			"       [--output|-o <file>] A vcd file to save the traced signals\n"
-			"       [--add-trace|-at <name=kind@addr/mask>] Add signal to be traced\n"
-			"       [-v]                Raise verbosity level\n"
-			"                           (can be passed more than once)\n"
-			"       <firmware>          A .hex or an ELF file. ELF files are\n"
-			"                           prefered, and can include debugging syms\n");
+	printf(
+         "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
+	 "       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
+	 "       [--list-cores]      List all supported AVR cores and exit\n"
+	 "       [--help|-h|-?]      Display this usage message and exit\n"
+	 "       [--trace, -t]       Run full scale decoder trace\n"
+	 "       [-ti <vector>]      Add traces for IRQ vector <vector>\n"
+         "       [--panel|-p]        Show control panel\n"
+	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
+                "(default 1234)\n"
+	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
+	 "       [-ee <.hex file>]   Load next .hex file as eeprom\n"
+	 "       [--input|-i <file>] A vcd file to use as input signals\n"
+	 "       [--output|-o <file>] A vcd file to save the traced signals\n"
+	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
+                "to be traced\n"
+	 "       [-v]                Raise verbosity level\n"
+	 "                           (can be passed more than once)\n"
+	 "       <firmware>          A .hex or an ELF file. ELF files are\n"
+	 "                           preferred, and can include "
+                "debugging syms\n");
 	exit(1);
 }
 
@@ -70,7 +78,7 @@ list_cores()
 	exit(1);
 }
 
-static avr_t * avr = NULL;
+static avr_t      * avr = NULL;
 
 static void
 sig_int(
@@ -92,8 +100,9 @@ main(
 	int trace = 0;
 	int gdb = 0;
 	int log = 1;
+        int panel = 0;
 	int port = 1234;
-	char name[24] = "";
+        char name[24] = "";
 	uint32_t loadBase = AVR_SEGMENT_OFFSET_FLASH;
 	int trace_vectors[8] = {0};
 	int trace_vectors_count = 0;
@@ -105,34 +114,49 @@ main(
 	for (int pi = 1; pi < argc; pi++) {
 		if (!strcmp(argv[pi], "--list-cores")) {
 			list_cores();
-		} else if (!strcmp(argv[pi], "-h") || !strcmp(argv[pi], "--help")) {
+		} else if (!strcmp(argv[pi], "-?") ||
+                           !strcmp(argv[pi], "-h") ||
+                           !strcmp(argv[pi], "--help")) {
 			display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-m") || !strcmp(argv[pi], "--mcu")) {
+		} else if (!strcmp(argv[pi], "-m") ||
+                           !strcmp(argv[pi], "--mcu")) {
 			if (pi < argc-1)
 				snprintf(name, sizeof(name), "%s", argv[++pi]);
 			else
 				display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-f") || !strcmp(argv[pi], "--freq")) {
+		} else if (!strcmp(argv[pi], "-f") ||
+                           !strcmp(argv[pi], "--freq")) {
 			if (pi < argc-1)
 				f_cpu = atoi(argv[++pi]);
 			else
 				display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-i") || !strcmp(argv[pi], "--input")) {
+		} else if (!strcmp(argv[pi], "-i") ||
+                           !strcmp(argv[pi], "--input")) {
 			if (pi < argc-1)
 				vcd_input = argv[++pi];
 			else
 				display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-t") || !strcmp(argv[pi], "--trace")) {
+		} else if (!strcmp(argv[pi], "-t") ||
+                           !strcmp(argv[pi], "--trace")) {
 			trace++;
-		} else if (!strcmp(argv[pi], "-o") || !strcmp(argv[pi], "--output")) {
+		} else if (!strcmp(argv[pi], "-o") ||
+                           !strcmp(argv[pi], "--output")) {
 			if (pi + 1 >= argc) {
-				fprintf(stderr, "%s: missing mandatory argument for %s.\n", argv[0], argv[pi]);
+				fprintf(
+                                    stderr,
+                                    "%s: missing mandatory argument for %s.\n",
+                                    argv[0], argv[pi]);
 				exit(1);
 			}
-			snprintf(f.tracename, sizeof(f.tracename), "%s", argv[++pi]);
-		} else if (!strcmp(argv[pi], "-at") || !strcmp(argv[pi], "--add-trace")) {
+			snprintf(f.tracename, sizeof(f.tracename),
+                                 "%s", argv[++pi]);
+		} else if (!strcmp(argv[pi], "-at") ||
+                           !strcmp(argv[pi], "--add-trace")) {
 			if (pi + 1 >= argc) {
-				fprintf(stderr, "%s: missing mandatory argument for %s.\n", argv[0], argv[pi]);
+				fprintf(
+                                    stderr,
+                                    "%s: missing mandatory argument for %s.\n",
+                                    argv[0], argv[pi]);
 				exit(1);
 			}
 			++pi;
@@ -142,55 +166,67 @@ main(
 				uint16_t addr;
 				char     name[64];
 			} trace;
-			const int n_args = sscanf(
-				argv[pi],
-				"%63[^=]=%63[^@]@0x%hx/0x%hhx",
-				&trace.name[0],
-				&trace.kind[0],
-				&trace.addr,
-				&trace.mask
-			);
+			const int n_args = sscanf(argv[pi],
+                                                  "%63[^=]=%63[^@]"
+                                                  "@0x%hx/0x%hhx",
+                                                  &trace.name[0],
+                                                  &trace.kind[0],
+                                                  &trace.addr,
+                                                  &trace.mask);
 			if (n_args != 4) {
 				--pi;
-				fprintf(stderr, "%s: format for %s is name=kind@addr/mask.\n", argv[0], argv[pi]);
+				fprintf(stderr,
+                                        "%s: format for %s is name=kind"
+                                        "@addr/mask.\n",
+                                        argv[0], argv[pi]);
 				exit(1);
 			}
 
 			/****/ if (!strcmp(trace.kind, "portpin")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_PORTPIN;
+				f.trace[f.tracecount].kind =
+                                        AVR_MMCU_TAG_VCD_PORTPIN;
 			} else if (!strcmp(trace.kind, "irq")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_IRQ;
+				f.trace[f.tracecount].kind =
+                                        AVR_MMCU_TAG_VCD_IRQ;
 			} else if (!strcmp(trace.kind, "trace")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_TRACE;
+				f.trace[f.tracecount].kind =
+                                        AVR_MMCU_TAG_VCD_TRACE;
 			} else {
-				fprintf(
-					stderr,
-					"%s: unknown trace kind '%s', not one of 'portpin', 'irq', or 'trace'.\n",
-					argv[0],
-					trace.kind
-				);
+				fprintf(stderr,
+					"%s: unknown trace kind '%s', "
+                                        "not one of 'portpin', 'irq', "
+                                        "or 'trace'.\n",
+                                        argv[0], trace.kind);
 				exit(1);
 			}
 			f.trace[f.tracecount].mask = trace.mask;
 			f.trace[f.tracecount].addr = trace.addr;
-			strncpy(f.trace[f.tracecount].name, trace.name, sizeof(f.trace[f.tracecount].name));
+			strncpy(f.trace[f.tracecount].name, trace.name,
+                                sizeof(f.trace[f.tracecount].name));
 
-			printf(
-				"Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
-				  f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN ? "portpin"
-				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ     ? "irq"
-				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_TRACE   ? "trace"
-				: "unknown",
+			printf("Adding %s trace on address 0x%04x, "
+                                "mask 0x%02x ('%s')\n",
+                                (f.trace[f.tracecount].kind ==
+                                 AVR_MMCU_TAG_VCD_PORTPIN) ? "portpin" :
+				(f.trace[f.tracecount].kind ==
+                                 AVR_MMCU_TAG_VCD_IRQ)     ? "irq" :
+				(f.trace[f.tracecount].kind ==
+                                 AVR_MMCU_TAG_VCD_TRACE)   ? "trace" :
+				                              "unknown",
 				f.trace[f.tracecount].addr,
 				f.trace[f.tracecount].mask,
-				f.trace[f.tracecount].name
-			);
+				f.trace[f.tracecount].name);
 
 			++f.tracecount;
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
-				trace_vectors[trace_vectors_count++] = atoi(argv[++pi]);
-		} else if (!strcmp(argv[pi], "-g") || !strcmp(argv[pi], "--gdb")) {
+				trace_vectors[trace_vectors_count++] =
+                                        atoi(argv[++pi]);
+		} else if (!strcmp(argv[pi], "-p") ||
+                           !strcmp(argv[pi], "--panel")) {
+			panel = 1;
+		} else if (!strcmp(argv[pi], "-g") ||
+                           !strcmp(argv[pi], "--gdb")) {
 			gdb++;
 			if (pi < (argc-2) && argv[pi+1][0] != '-' )
 				port = atoi(argv[++pi]);
@@ -201,42 +237,8 @@ main(
 		} else if (!strcmp(argv[pi], "-ff")) {
 			loadBase = AVR_SEGMENT_OFFSET_FLASH;
 		} else if (argv[pi][0] != '-') {
-			char * filename = argv[pi];
-			char * suffix = strrchr(filename, '.');
-			if (suffix && !strcasecmp(suffix, ".hex")) {
-				if (!name[0] || !f_cpu) {
-					fprintf(stderr, "%s: -mcu and -freq are mandatory to load .hex files\n", argv[0]);
-					exit(1);
-				}
-				ihex_chunk_p chunk = NULL;
-				int cnt = read_ihex_chunks(filename, &chunk);
-				if (cnt <= 0) {
-					fprintf(stderr, "%s: Unable to load IHEX file %s\n",
-						argv[0], argv[pi]);
-					exit(1);
-				}
-				printf("Loaded %d section of ihex\n", cnt);
-				for (int ci = 0; ci < cnt; ci++) {
-					if (chunk[ci].baseaddr < (1*1024*1024)) {
-						f.flash = chunk[ci].data;
-						f.flashsize = chunk[ci].size;
-						f.flashbase = chunk[ci].baseaddr;
-						printf("Load HEX flash %08x, %d\n", f.flashbase, f.flashsize);
-					} else if (chunk[ci].baseaddr >= AVR_SEGMENT_OFFSET_EEPROM ||
-							chunk[ci].baseaddr + loadBase >= AVR_SEGMENT_OFFSET_EEPROM) {
-						// eeprom!
-						f.eeprom = chunk[ci].data;
-						f.eesize = chunk[ci].size;
-						printf("Load HEX eeprom %08x, %d\n", chunk[ci].baseaddr, f.eesize);
-					}
-				}
-			} else {
-				if (elf_read_firmware(filename, &f) == -1) {
-					fprintf(stderr, "%s: Unable to load firmware from file %s\n",
-							argv[0], filename);
-					exit(1);
-				}
-			}
+                        avr_setup_firmware(argv[pi], loadBase, &f,
+                                           (name[0] && f_cpu), argv[0]);
 		}
 	}
 
@@ -255,23 +257,29 @@ main(
 	avr->trace = trace;
 	avr_load_firmware(avr, &f);
 	if (f.flashbase) {
-		printf("Attempted to load a bootloader at %04x\n", f.flashbase);
+		printf("Attempted to load a bootloader at %04x\n",
+                       f.flashbase);
 		avr->pc = f.flashbase;
 	}
 	for (int ti = 0; ti < trace_vectors_count; ti++) {
 		for (int vi = 0; vi < avr->interrupts.vector_count; vi++)
-			if (avr->interrupts.vector[vi]->vector == trace_vectors[ti])
+			if (avr->interrupts.vector[vi]->vector ==
+                            trace_vectors[ti]) {
 				avr->interrupts.vector[vi]->trace = 1;
+                        }
 	}
 	if (vcd_input) {
 		static avr_vcd_t input;
 		if (avr_vcd_init_input(avr, vcd_input, &input)) {
-			fprintf(stderr, "%s: Warning: VCD input file %s failed\n", argv[0], vcd_input);
+			fprintf(stderr,
+                                "%s: Warning: VCD input file %s failed\n",
+                                argv[0], vcd_input);
 		}
 	}
 
 	// even if not setup at startup, activate gdb if crashing
 	avr->gdb_port = port;
+
 	if (gdb) {
 		avr->state = cpu_Stopped;
 		avr_gdb_init(avr);
@@ -280,11 +288,18 @@ main(
 	signal(SIGINT, sig_int);
 	signal(SIGTERM, sig_int);
 
-	for (;;) {
-		int state = avr_run(avr);
-		if (state == cpu_Done || state == cpu_Crashed)
-			break;
-	}
+        if (panel) {
+                // Panel has its own run loop.
 
+                if (!Run_with_panel(avr))
+                        fprintf(stderr, "%s: Failed: Could not show panel.\n",
+                                argv[0]);
+        } else {
+                for (;;) {
+                        int state = avr_run(avr);
+                        if (state == cpu_Done || state == cpu_Crashed)
+                                break;
+                }
+	}
 	avr_terminate(avr);
 }

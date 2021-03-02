@@ -59,7 +59,8 @@ libsimavr	: ${OBJ}/libsimavr.so
 endif
 
 ${OBJ}/${target}.elf	: libsimavr
-${OBJ}/${target}.elf	: ${OBJ}/${target}.o
+${OBJ}/${target}.elf	: ${OBJ}/${target}.o ${OBJ}/panel.o 
+	${CC} -o $@ ${filter %.o,$^} -ldl ${LDFLAGS}
 
 ${target}	: ${OBJ}/${target}.elf
 
