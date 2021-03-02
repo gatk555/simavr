@@ -46,26 +46,17 @@ avr_adc_int_raise(
 	return 0;
 }
 
-static avr_cycle_count_t
-avr_adc_convert(struct avr_t * avr, avr_cycle_count_t when, void * param)
+/* Sample the input voltage. */
+
+static void avr_adc_sample(avr_adc_t *p)
 {
-        avr_adc_t *p = (avr_adc_t *)param;
+        avr_t         *avr;
+        avr_adc_mux_t  mux;
+	int32_t        reg = 0, clipped = 0;
+        uint8_t        shift;
 
-        p->first = 0; // Converter initialised
-
-        /* Ask the calling program for inputs. */
-
-	avr_adc_mux_t mux = p->muxmode[p->current_muxi];
-        union {
-                avr_adc_mux_t mux;
-                uint32_t v;
-        } e = { .mux = mux };
-        avr_raise_irq(p->io.irq + ADC_IRQ_OUT_TRIGGER, e.v);
-
-	// optional shift left/right
-	uint8_t shift = p->current_extras.adjust ? 6 : 0; // shift LEFT
-
-	int32_t reg = 0, clipped = 0;
+        avr = p->io.avr;
+	mux = p->muxmode[p->current_muxi];
 	switch (mux.kind) {
 		case ADC_MUX_SINGLE:
 			reg = p->adc_values[mux.src];
@@ -83,7 +74,7 @@ avr_adc_convert(struct avr_t * avr, avr_cycle_count_t when, void * param)
 			reg = mux.src; // reference voltage
 			break;
 		case ADC_MUX_VCC4:
-			if ( !avr->vcc) {
+			if (!avr->vcc) {
 				AVR_LOG(avr, LOG_WARNING, "ADC: missing VCC analog voltage\n");
 			} else
 				reg = avr->vcc / 4;
@@ -146,10 +137,35 @@ avr_adc_convert(struct avr_t * avr, avr_cycle_count_t when, void * param)
                         p->current_muxi, reg, clipped, vref);
 		reg = clipped;
 	}
+
+        // optional shift left/right
+
+	shift = p->current_extras.adjust ? 6 : 0; // shift LEFT
         reg &= 0x3ff;
 	reg <<= shift;
 //	printf("ADC to 9/10 bits %x shifted %d\n", reg, shift);
         p->result = reg;
+}
+
+static avr_cycle_count_t
+avr_adc_convert(struct avr_t * avr, avr_cycle_count_t when, void * param)
+{
+        avr_adc_t *p = (avr_adc_t *)param;
+
+        p->first = 0; // Converter initialised
+
+        /* Ask the calling program for inputs. */
+
+	avr_adc_mux_t mux = p->muxmode[p->current_muxi];
+        union {
+                avr_adc_mux_t mux;
+                uint32_t v;
+        } e = { .mux = mux };
+        avr_raise_irq(p->io.irq + ADC_IRQ_OUT_TRIGGER, e.v);
+
+        /* Sample and convert the input. */
+
+        avr_adc_sample(p);
 
         /* Schedule the interrupt in 11 ADC cycles. */
 
@@ -366,6 +382,19 @@ avr_adc_irq_notify(
 			}
 		}
                 break;
+                case ADC_IRQ_RESAMPLE: {
+                        /* This is meaningful only between sampling
+                         * and conversion completion.  It is provided to
+                         * allow calling programs to exit their avr_run()
+                         * function on ADC sampling, and then determine
+                         * what the input will be.
+                         *
+                         * Re-sample the input data.
+                         */
+
+                        avr_adc_sample(p);
+                }
+                break;
 	}
 }
 
@@ -401,6 +430,7 @@ static const char * irq_names[ADC_IRQ_COUNT] = {
 	[ADC_IRQ_TEMP] = "16<temp",
 	[ADC_IRQ_IN_TRIGGER] = "<trigger_in",
 	[ADC_IRQ_OUT_TRIGGER] = ">trigger_out",
+	[ADC_IRQ_RESAMPLE] = "<resample",
 };
 
 static	avr_io_t	_io = {

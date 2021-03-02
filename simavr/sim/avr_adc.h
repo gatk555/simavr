@@ -47,9 +47,10 @@ enum {
 	ADC_IRQ_ADC4, ADC_IRQ_ADC5, ADC_IRQ_ADC6, ADC_IRQ_ADC7,
 	ADC_IRQ_ADC8, ADC_IRQ_ADC9, ADC_IRQ_ADC10, ADC_IRQ_ADC11,
 	ADC_IRQ_ADC12, ADC_IRQ_ADC13, ADC_IRQ_ADC14, ADC_IRQ_ADC15,
-	ADC_IRQ_TEMP,			// see the datasheet
-	ADC_IRQ_IN_TRIGGER,
-	ADC_IRQ_OUT_TRIGGER,	// sends a avr_adc_mux_t
+	ADC_IRQ_TEMP,		// See the datasheet.
+	ADC_IRQ_IN_TRIGGER,     // Starts a conversion.
+	ADC_IRQ_OUT_TRIGGER,	// Sends a avr_adc_mux_t, requesting input.
+        ADC_IRQ_RESAMPLE,       // Re-sample the input following OUT_TRIGGER.
 	ADC_IRQ_COUNT
 };
 
