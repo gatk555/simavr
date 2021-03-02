@@ -114,7 +114,7 @@ avr_t *tests_init_avr(const char *elfname) {
 	return avr;
 }
 
-int tests_run_test(avr_t *avr, unsigned long run_usec) {
+int tests_run_test(avr_t *avr, unsigned long run_usec, int (*run)(avr_t *)) {
 	if (!avr)
 		fail("Internal test error: avr == NULL in run_test()");
 	// register a cycle timer to fire after 100 seconds (simulation time);
@@ -129,7 +129,7 @@ int tests_run_test(avr_t *avr, unsigned long run_usec) {
 	if (reason == 0) {
 		// setjmp() returned directly, run avr
 		while (1)
-			my_avr_run(avr);
+			run(avr);
 	} else if (reason == 1) {
 		// returned from longjmp(); cycle timer fired
 		return reason;
@@ -143,19 +143,12 @@ int tests_run_test(avr_t *avr, unsigned long run_usec) {
 
 int tests_init_and_run_test(const char *elfname, unsigned long run_usec) {
 	avr_t *avr = tests_init_avr(elfname);
-	return tests_run_test(avr, run_usec);
+	return tests_run_test(avr, run_usec, my_avr_run);
 }
-
-struct output_buffer {
-	char *str;
-	int currlen;
-	int alloclen;
-	int maxlen;
-};
 
 /* Callback for receiving data via an IRQ. */
 
-static void buf_output_cb(struct avr_irq_t *irq, uint32_t value, void *param) {
+void buf_output_cb(struct avr_irq_t *irq, uint32_t value, void *param) {
 	struct output_buffer *buf = param;
 	if (!buf)
 		fail("Internal error: buf == NULL in buf_output_cb()");
@@ -175,13 +168,13 @@ static void buf_output_cb(struct avr_irq_t *irq, uint32_t value, void *param) {
  * after calling avr_register_io_write().
  */
 
-static void reg_output_cb(struct avr_t *avr, avr_io_addr_t addr,
+void reg_output_cb(struct avr_t *avr, avr_io_addr_t addr,
                           uint8_t v, void *param)
 {
     buf_output_cb(NULL, v, param);
 }
 
-static void init_output_buffer(struct output_buffer *buf) {
+void init_output_buffer(struct output_buffer *buf) {
 	buf->str = malloc(128);
 	buf->str[0] = 0;
 	buf->currlen = 0;
@@ -194,8 +187,9 @@ static void tests_assert_xxxx_receive_avr(avr_t                *avr,
                                           struct output_buffer *buf,
                                           const char           *expected)
 {
-	enum tests_finish_reason reason = tests_run_test(avr, run_usec);
+        enum tests_finish_reason reason;
 
+        reason = tests_run_test(avr, run_usec, my_avr_run);
 	if (reason == LJR_CYCLE_TIMER) {
 		if (strcmp(buf->str, expected) == 0) {
 			_fail(NULL, 0, "Simulation did not finish within %lu simulated usec. "

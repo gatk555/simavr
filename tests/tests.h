@@ -13,6 +13,22 @@ enum tests_finish_reason {
 #define ATMEGA88_UDR0 0xc6
 #define ATMEGA644_UDR0 0xc6
 
+/* Direct access to an output buffer for tests with their own run(). */
+
+struct output_buffer {
+	char *str;
+	int currlen;
+	int alloclen;
+	int maxlen;
+};
+
+void init_output_buffer(struct output_buffer *buf);
+void buf_output_cb(struct avr_irq_t *irq, uint32_t value, void *param);
+void reg_output_cb(struct avr_t *avr, avr_io_addr_t addr, uint8_t v,
+                   void *param);
+
+/* Commonly-used functions. */
+
 #define fail(s, ...) _fail(__FILE__, __LINE__, s, ## __VA_ARGS__)
 
 void __attribute__ ((noreturn,format (printf, 3, 4)))
@@ -22,7 +38,7 @@ avr_t *tests_init_avr(const char *elfname);
 void tests_init(int argc, char **argv);
 void tests_success(void);
 
-int tests_run_test(avr_t *avr, unsigned long usec);
+int tests_run_test(avr_t *avr, unsigned long run_usec, int (*run)(avr_t *));
 int tests_init_and_run_test(const char *elfname, unsigned long run_usec);
 void tests_assert_uart_receive(const char *elfname,
 			       unsigned long run_usec,
