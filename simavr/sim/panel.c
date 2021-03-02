@@ -181,7 +181,7 @@ static void adc_read_notify(struct avr_irq_t *irq, uint32_t value, void *param)
  * external pullup feature - the panel provides "strong" inputs.
  */
 
-static void d_out_notify(struct avr_irq_t *irq, uint32_t value, void *param)
+static void d_out_notify(avr_irq_t *irq, uint32_t value, void *param)
 {
     struct port *pp;
     uint8_t      ddr, out;
@@ -262,6 +262,12 @@ static int push_val(Sim_RH handle, unsigned int value)
             break;
         case 3:
             avr_raise_irq(ADC_base_irq + adc_chan_1, value);
+            if (adc_chan_1 == adc_chan_2) {
+                /* Update other entry field. */
+
+                ADC_update_chan = adc_chan_1;
+                ADC_update_handle = ADC_input_2_handle;
+            }
             break;
         case 4:
             if (value < ADC_CHANNEL_COUNT) {
@@ -272,6 +278,12 @@ static int push_val(Sim_RH handle, unsigned int value)
             break;
         case 5:
             avr_raise_irq(ADC_base_irq + adc_chan_2, value);
+            if (adc_chan_1 == adc_chan_2) {
+                /* Update other entry field. */
+
+                ADC_update_chan = adc_chan_1;
+                ADC_update_handle = ADC_input_1_handle;
+            }
             break;
         case 6:
             if (value < ADC_CHANNEL_COUNT) {
@@ -502,7 +514,9 @@ int Run_with_panel(avr_t *avr)
 
         avr_cycle_timer_register(avr, Brc.burst, burst_complete, NULL);
 
-        /* Run the simulation.  Stops on fatal error or endless sleep. */
+        /* Run the simulation.  Stops on requested cycles done, fatal error
+         * or endless sleep.
+         */
 
         burst_done = 0;
         do
