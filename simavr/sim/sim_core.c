@@ -1435,7 +1435,12 @@ run_one_again:
 		avr->run_cycle_count -= cycle;
 		avr->pc = new_pc;
 		goto run_one_again;
-	}
+	} else if (avr->state == cpu_Fault) {
+                /* Pretend previous instruction was never executed. */
 
+                avr->cycle -= cycle;
+                new_pc = avr->pc;
+                avr->state = avr->saved_state;
+        }
 	return new_pc;
 }

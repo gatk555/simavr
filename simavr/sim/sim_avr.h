@@ -108,6 +108,7 @@ enum {
 
 	cpu_Step,		// run ONE instruction, then...
 	cpu_StepDone,	// tell gdb it's all OK, and give it registers
+        cpu_Fault,      // see avr_fault_current()
 	cpu_Done,       // avr software stopped gracefully
 	cpu_Crashed,    // avr software crashed (watchdog fired)
 };
@@ -180,7 +181,8 @@ typedef struct avr_t {
 	// filled by the ELF data, this allow tracking of invalid jumps
 	uint32_t			codeend;
 
-	int					state;		// stopped, running, sleeping
+	int				state;		// stopped, running, sleeping
+	int				saved_state;
 	uint32_t			frequency;	// frequency we are running at
 	// mostly used by the ADC for now
 	uint32_t			vcc,avcc,aref; // (optional) voltages in millivolts
@@ -465,6 +467,10 @@ void avr_callback_sleep_gdb(avr_t * avr, avr_cycle_count_t howLong);
 void avr_callback_run_gdb(avr_t * avr);
 void avr_callback_sleep_raw(avr_t * avr, avr_cycle_count_t howLong);
 void avr_callback_run_raw(avr_t * avr);
+
+/* Fault current AVR instruction - pretend it never happened. */
+
+void avr_fault_current(avr_t * avr);
 
 /**
  * Accumulates sleep requests (and returns a sleep time of 0) until

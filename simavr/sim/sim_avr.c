@@ -253,6 +253,32 @@ avr_loadcode(
 	memcpy(avr->flash + address, code, size);
 }
 
+/* This function can be called during the execution of an AVR instruction,
+ * almost certainly one that reads a GPIO port.  On return from the caller,
+ * avr_run_one() will itself return, with the PC pointing to the original
+ * instruction which will be re-executed when simulation resumes.
+ *
+ * The purpose is to support lazy evaluation in the simulation of the
+ * surrounding circuit.  When a GPIO port is read, an IOPORT_IRQ_REG_PIN
+ * handler calls avr_fault_current() and returns, simulation stops and
+ * control returns to the caller of the AVR simulator.  The caller can
+ * then work out what the GPIO inputs should look like and set them.
+ * Execution resumes and the simulated firmware reads the new value.
+ *
+ * Before execution resumes the simulated processor is in a slightly
+ * odd state, as register and flag values may have been "magically"
+ * altered.  If an interrupt occurs before the faulted instruction
+ * is re-executed the anomolous state is visible to the interrupt
+ * handler.  Do not use if that matters.
+ */
+
+void
+avr_fault_current(avr_t * avr)
+{
+        avr->saved_state = avr->state;
+        avr->state = cpu_Fault;
+}
+
 /**
  * Accumulates sleep requests (and returns a sleep time of 0) until
  * a minimum count of requested sleep microseconds are reached
