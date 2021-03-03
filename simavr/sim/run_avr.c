@@ -46,17 +46,27 @@ display_usage(
 	 "       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
 	 "       [--list-cores]      List all supported AVR cores and exit\n"
 	 "       [--help|-h|-?]      Display this usage message and exit\n"
+#ifdef CONFIG_SIMAVR_TRACE
 	 "       [--trace, -t]       Run full scale decoder trace\n"
+	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
+                "to be traced\n"
+#else
+	 "       [--trace, -t]       Run full scale decoder trace (Off)\n"
+	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
+                "to be traced (Off)\n"
+#endif //CONFIG_SIMAVR_TRACE
 	 "       [-ti <vector>]      Add traces for IRQ vector <vector>\n"
+#ifdef CONFIG_PANEL
          "       [--panel|-p]        Show control panel\n"
+#else
+         "       [--panel|-p]        Show control panel (Off)\n"
+#endif // CONFIG_PANEL
 	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
                 "(default 1234)\n"
 	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
 	 "       [-ee <.hex file>]   Load next .hex file as eeprom\n"
 	 "       [--input|-i <file>] A vcd file to use as input signals\n"
 	 "       [--output|-o <file>] A vcd file to save the traced signals\n"
-	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
-                "to be traced\n"
 	 "       [-v]                Raise verbosity level\n"
 	 "                           (can be passed more than once)\n"
 	 "       <firmware>          A .hex or an ELF file. ELF files are\n"
@@ -95,12 +105,16 @@ main(
 		int argc,
 		char *argv[])
 {
+#ifdef CONFIG_SIMAVR_TRACE
+	int trace = 0;
+#endif //CONFIG_SIMAVR_TRACE
+#ifdef CONFIG_PANEL
+        int panel = 0;
+#endif // CONFIG_PANEL
 	elf_firmware_t f = {{0}};
 	uint32_t f_cpu = 0;
-	int trace = 0;
 	int gdb = 0;
 	int log = 1;
-        int panel = 0;
 	int port = 1234;
         char name[24] = "";
 	uint32_t loadBase = AVR_SEGMENT_OFFSET_FLASH;
@@ -136,9 +150,6 @@ main(
 				vcd_input = argv[++pi];
 			else
 				display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-t") ||
-                           !strcmp(argv[pi], "--trace")) {
-			trace++;
 		} else if (!strcmp(argv[pi], "-o") ||
                            !strcmp(argv[pi], "--output")) {
 			if (pi + 1 >= argc) {
@@ -150,6 +161,10 @@ main(
 			}
 			snprintf(f.tracename, sizeof(f.tracename),
                                  "%s", argv[++pi]);
+#ifdef CONFIG_SIMAVR_TRACE
+		} else if (!strcmp(argv[pi], "-t") ||
+                           !strcmp(argv[pi], "--trace")) {
+			trace++;
 		} else if (!strcmp(argv[pi], "-at") ||
                            !strcmp(argv[pi], "--add-trace")) {
 			if (pi + 1 >= argc) {
@@ -218,13 +233,30 @@ main(
 				f.trace[f.tracecount].name);
 
 			++f.tracecount;
+#else
+		} else if (!strcmp(argv[pi], "-t") ||
+                           !strcmp(argv[pi], "--trace") ||
+                           !strcmp(argv[pi], "-at") ||
+                           !strcmp(argv[pi], "--add-trace")) {
+                        fprintf(stderr,
+                                "%s: tracing option '%s' requires "
+                                "compilation option CONFIG_SIMAVR_TRACE\n",
+                                argv[0], argv[pi]);
+#endif //CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
 				trace_vectors[trace_vectors_count++] =
                                         atoi(argv[++pi]);
 		} else if (!strcmp(argv[pi], "-p") ||
                            !strcmp(argv[pi], "--panel")) {
+#ifdef CONFIG_PANEL
 			panel = 1;
+#else
+                        fprintf(stderr,
+                                "%s: option '%s' requires "
+                                "compilation option CONFIG_PANEL\n",
+                                argv[0], argv[pi]);
+#endif // CONFIG_PANEL
 		} else if (!strcmp(argv[pi], "-g") ||
                            !strcmp(argv[pi], "--gdb")) {
 			gdb++;
@@ -254,7 +286,10 @@ main(
 	}
 	avr_init(avr);
 	avr->log = (log > LOG_TRACE ? LOG_TRACE : log);
+#ifdef CONFIG_SIMAVR_TRACE
 	avr->trace = trace;
+#endif //CONFIG_SIMAVR_TRACE
+
 	avr_load_firmware(avr, &f);
 	if (f.flashbase) {
 		printf("Attempted to load a bootloader at %04x\n",
@@ -288,6 +323,7 @@ main(
 	signal(SIGINT, sig_int);
 	signal(SIGTERM, sig_int);
 
+#ifdef CONFIG_PANEL
         if (panel) {
                 // Panel has its own run loop.
 
@@ -295,6 +331,9 @@ main(
                         fprintf(stderr, "%s: Failed: Could not show panel.\n",
                                 argv[0]);
         } else {
+#else
+	{
+#endif // CONFIG_PANEL
                 for (;;) {
                         int state = avr_run(avr);
                         if (state == cpu_Done || state == cpu_Crashed)

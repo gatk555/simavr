@@ -35,8 +35,16 @@ all:
 
 include ../Makefile.common
 
+# Control panel requires libblink.so and its header
+ifeq ($(wildcard sim/blink/sim.h),)
+    panel   :=
+else
+    panel   := ${OBJ}/panel.o
+    CFLAGS += -DCONFIG_PANEL=1
+endif
+
 cores	:= ${wildcard cores/*.c}
-sim		:= ${wildcard sim/sim_*.c} ${wildcard sim/avr_*.c}
+sim	:= ${wildcard sim/sim_*.c} ${wildcard sim/avr_*.c}
 sim_o 	:= ${patsubst sim/%.c, ${OBJ}/%.o, ${sim}}
 
 VPATH	= cores
@@ -59,7 +67,7 @@ libsimavr	: ${OBJ}/libsimavr.so
 endif
 
 ${OBJ}/${target}.elf	: libsimavr
-${OBJ}/${target}.elf	: ${OBJ}/${target}.o ${OBJ}/panel.o 
+${OBJ}/${target}.elf	: ${OBJ}/${target}.o ${panel}
 	${CC} -o $@ ${filter %.o,$^} -ldl ${LDFLAGS}
 
 ${target}	: ${OBJ}/${target}.elf
