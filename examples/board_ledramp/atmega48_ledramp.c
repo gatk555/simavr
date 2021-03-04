@@ -66,7 +66,7 @@ void tick_init()
 		prescaler=8
 		hz=64
 		(clock/prescaler/hz)-1:63 -- */
-    OCR2A = 63;
+    OCR2A = 255;
     TIMSK2  |= (1 << OCIE2A);
 }
 
