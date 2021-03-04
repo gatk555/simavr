@@ -64,6 +64,8 @@ static const struct simulator_calls blink_callbacks =
 
 static avr_irq_t   *ADC_base_irq;
 static int          ADC_sor;
+static unsigned int ADC_chan_pos, ADC_chan_neg;
+
 static unsigned int ADC_update_chan = ADC_CHANNEL_COUNT;
 static Sim_RH       ADC_update_handle;
 
@@ -75,13 +77,17 @@ static Sim_RH       ADC_update_handle;
 
 /* Handles for non-port Blink items. */
 
-#define PC_handle            ((Sim_RH)1)
-#define Cycles_handle        ((Sim_RH)2)
-#define ADC_input_1_handle   ((Sim_RH)3)
-#define ADC_channel_1_handle ((Sim_RH)4)
-#define ADC_input_2_handle   ((Sim_RH)5)
-#define ADC_channel_2_handle ((Sim_RH)6)
-#define ADC_SOR_handle       ((Sim_RH)7)
+#define PC_handle              ((Sim_RH)1)
+#define Cycles_handle          ((Sim_RH)2)
+#define ADC_input_pos_handle   ((Sim_RH)3)
+#define ADC_channel_pos_handle ((Sim_RH)4)
+#define ADC_input_neg_handle   ((Sim_RH)5)
+#define ADC_channel_neg_handle ((Sim_RH)6)
+#define ADC_SOR_handle         ((Sim_RH)7)
+
+/* Make handles useable as case labels. */
+
+#define CS(x) ((intptr_t)(x))
 
 /* Ask Blink for the number of cycles to simulate. */
 
@@ -150,20 +156,24 @@ static void adc_read_notify(struct avr_irq_t *irq, uint32_t value, void *param)
         avr_adc_mux_t mux;
         uint32_t      v;
     }         e;
-    uint32_t  channel, input;
+    uint32_t  input;
 
     /* Show the channel(s) being read and current value(s). */
 
     e.v = value;
-    channel = e.mux.src;
-    Bfp->new_value(ADC_channel_1_handle, channel);
-    input = ADC_base_irq[channel].value;
-    Bfp->new_value(ADC_input_1_handle, input);
+    if (e.mux.src != ADC_chan_pos) {
+        ADC_chan_pos = e.mux.src;
+        Bfp->new_value(ADC_channel_pos_handle, ADC_chan_pos);
+        input = ADC_base_irq[ADC_chan_pos].value;
+        Bfp->new_value(ADC_input_pos_handle, input);
+    }
 
-    channel = e.mux.diff;
-    Bfp->new_value(ADC_channel_2_handle, channel);
-    input = ADC_base_irq[channel].value;
-    Bfp->new_value(ADC_input_2_handle, input);
+    if (e.mux.kind == ADC_MUX_DIFF && e.mux.diff != ADC_chan_neg) {
+        ADC_chan_neg = e.mux.diff;
+        Bfp->new_value(ADC_channel_neg_handle, ADC_chan_neg);
+        input = ADC_base_irq[ADC_chan_neg].value;
+        Bfp->new_value(ADC_input_neg_handle, input);
+    }
 
     if (ADC_sor) {
         /* Stop so that the entries can be changed. */
@@ -251,48 +261,46 @@ static int push_val(Sim_RH handle, unsigned int value)
 
     handle_type = (uintptr_t)handle;
     if (handle_type <= 'Z') {
-        static int adc_chan_1, adc_chan_2;
-
         switch (handle_type) {
-        case 1:
+        case CS(PC_handle):
             fprintf(stderr, "Changed PC!\n");
             break;
-        case 2:
+        case CS(Cycles_handle):
             fprintf(stderr, "Changed cycle count!\n");
             break;
-        case 3:
-            avr_raise_irq(ADC_base_irq + adc_chan_1, value);
-            if (adc_chan_1 == adc_chan_2) {
+        case CS(ADC_input_pos_handle):
+            avr_raise_irq(ADC_base_irq + ADC_chan_pos, value);
+            if (ADC_chan_pos == ADC_chan_neg) {
                 /* Update other entry field. */
 
-                ADC_update_chan = adc_chan_1;
-                ADC_update_handle = ADC_input_2_handle;
+                ADC_update_chan = ADC_chan_pos;
+                ADC_update_handle = ADC_input_neg_handle;
             }
             break;
-        case 4:
+        case CS(ADC_channel_pos_handle):
             if (value < ADC_CHANNEL_COUNT) {
-                adc_chan_1 = value;
+                ADC_chan_pos = value;
                 ADC_update_chan = value;
-                ADC_update_handle = ADC_input_1_handle;
+                ADC_update_handle = ADC_input_pos_handle;
             }
             break;
-        case 5:
-            avr_raise_irq(ADC_base_irq + adc_chan_2, value);
-            if (adc_chan_1 == adc_chan_2) {
+        case CS(ADC_input_neg_handle):
+            avr_raise_irq(ADC_base_irq + ADC_chan_neg, value);
+            if (ADC_chan_pos == ADC_chan_neg) {
                 /* Update other entry field. */
 
-                ADC_update_chan = adc_chan_1;
-                ADC_update_handle = ADC_input_1_handle;
+                ADC_update_chan = ADC_chan_pos;
+                ADC_update_handle = ADC_input_pos_handle;
             }
             break;
-        case 6:
+        case CS(ADC_channel_neg_handle):
             if (value < ADC_CHANNEL_COUNT) {
-                adc_chan_2 = value;
+                ADC_chan_neg = value;
                 ADC_update_chan = value;
-                ADC_update_handle = ADC_input_2_handle;
+                ADC_update_handle = ADC_input_neg_handle;
             }
             break;
-        case 7:
+        case CS(ADC_SOR_handle):
             /* Stop on read. */
 
             ADC_sor = value;
@@ -404,11 +412,11 @@ static void show_adc(void)
     Blink_RH   row;
 
     row = Bfp->new_row("ADC");
-    Bfp->add_register("mV", ADC_input_2_handle, 13, RO_STYLE_DECIMAL, row);
-    Bfp->add_register("Channel -", ADC_channel_2_handle, 4,
+    Bfp->add_register("mV", ADC_input_neg_handle, 13, RO_STYLE_DECIMAL, row);
+    Bfp->add_register("Channel -", ADC_channel_neg_handle, 4,
                       RO_STYLE_SPIN, row);
-    Bfp->add_register("mV", ADC_input_1_handle, 13, RO_STYLE_DECIMAL, row);
-    Bfp->add_register("Channel +", ADC_channel_1_handle, 4,
+    Bfp->add_register("mV", ADC_input_pos_handle, 13, RO_STYLE_DECIMAL, row);
+    Bfp->add_register("Channel +", ADC_channel_pos_handle, 4,
                       RO_STYLE_SPIN, row);
     Bfp->add_register("SoR", ADC_SOR_handle, 1, RO_ALT_COLOURS, row);
     Bfp->close_row(row);
