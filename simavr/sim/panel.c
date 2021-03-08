@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <dlfcn.h>
+#include <sys/time.h>
 
 #include "blink/sim.h"
 #include "sim_avr.h"
@@ -530,8 +531,21 @@ int Run_with_panel(avr_t *avr)
         do
             state = my_avr_run(avr);
         while (!burst_done && state < cpu_Done);
-        Bfp->new_value(PC_handle, avr->pc);         // Updated PC.
-        Bfp->new_value(Cycles_handle, avr->cycle);  // Updated cycle count.
+
+        /* Display the PC and cycle count.  Limited to about 10 Hz. */
+
+        {
+            static struct timeval last_tv;
+            struct timeval        tv;
+
+            gettimeofday(&tv, NULL);
+            if (tv.tv_usec - last_tv.tv_usec > 100000 ||
+                tv.tv_sec > last_tv.tv_sec) {
+                last_tv = tv;
+                Bfp->new_value(PC_handle, avr->pc);         // Update PC ...
+                Bfp->new_value(Cycles_handle, avr->cycle);  // and cycle count.
+            }
+        }
     } while (state < cpu_Done);
     return 1;
 }
