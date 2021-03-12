@@ -111,7 +111,7 @@ main(
 #ifdef CONFIG_PANEL
         int panel = 0;
 #endif // CONFIG_PANEL
-	elf_firmware_t f = {{0}};
+	elf_firmware_t f;
 	uint32_t f_cpu = 0;
 	int gdb = 0;
 	int log = 1;
@@ -121,6 +121,7 @@ main(
 	int trace_vectors[8] = {0};
 	int trace_vectors_count = 0;
 	const char *vcd_input = NULL;
+	const char *vcd_output = NULL;
 	const char *firmware;
 
 	if (argc == 1)
@@ -160,8 +161,7 @@ main(
                                     argv[0], argv[pi]);
 				exit(1);
 			}
-			snprintf(f.tracename, sizeof(f.tracename),
-				 "%s", argv[++pi]);
+			vcd_output = argv[++pi];
 #ifdef CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-t") ||
                            !strcmp(argv[pi], "--trace")) {
@@ -291,7 +291,8 @@ main(
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace = trace;
 #endif //CONFIG_SIMAVR_TRACE
-
+	if (vcd_output)
+		snprintf(f.tracename, sizeof(f.tracename), "%s", vcd_output);
 	avr_load_firmware(avr, &f);
 	if (f.flashbase) {
 		printf("Attempted to load a bootloader at %04x\n",
