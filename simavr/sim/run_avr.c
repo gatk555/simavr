@@ -34,7 +34,7 @@
 
 #include "sim_core_decl.h"
 
-extern int Run_with_panel(avr_t *avr);
+extern int Run_with_panel(avr_t *, elf_firmware_t *, const char *, int);
 
 static void
 display_usage(
@@ -121,6 +121,7 @@ main(
 	int trace_vectors[8] = {0};
 	int trace_vectors_count = 0;
 	const char *vcd_input = NULL;
+	const char *firmware;
 
 	if (argc == 1)
 		display_usage(basename(argv[0]));
@@ -160,7 +161,7 @@ main(
 				exit(1);
 			}
 			snprintf(f.tracename, sizeof(f.tracename),
-                                 "%s", argv[++pi]);
+				 "%s", argv[++pi]);
 #ifdef CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-t") ||
                            !strcmp(argv[pi], "--trace")) {
@@ -269,7 +270,8 @@ main(
 		} else if (!strcmp(argv[pi], "-ff")) {
 			loadBase = AVR_SEGMENT_OFFSET_FLASH;
 		} else if (argv[pi][0] != '-') {
-                        avr_setup_firmware(argv[pi], loadBase, &f,
+                        firmware = argv[pi];
+                        avr_setup_firmware(firmware, loadBase, &f,
                                            (name[0] && f_cpu), argv[0]);
 		}
 	}
@@ -309,6 +311,7 @@ main(
 			fprintf(stderr,
                                 "%s: Warning: VCD input file %s failed\n",
                                 argv[0], vcd_input);
+			vcd_input = NULL;
 		}
 	}
 
@@ -327,7 +330,7 @@ main(
         if (panel) {
                 // Panel has its own run loop.
 
-                if (!Run_with_panel(avr))
+                if (!Run_with_panel(avr, &f, firmware, vcd_input != NULL))
                         fprintf(stderr, "%s: Failed: Could not show panel.\n",
                                 argv[0]);
         } else {
