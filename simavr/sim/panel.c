@@ -65,9 +65,12 @@ static int Burst_preset;                                // For stop/start
 
 static struct blink_functs *Bfp;
 
-static int push_val(Sim_RH handle, unsigned int value);
+static int  push_val(Sim_RH handle, unsigned int value);
+static void stop(void);
 static const struct simulator_calls blink_callbacks =
-    {.sim_push_val = push_val};
+    {.sim_push_val = push_val,
+     .sim_done = stop,
+    };
 
 /* For ADC input. */
 
@@ -492,6 +495,15 @@ static int my_avr_run(avr_t *avr)
     // if we were stepping, use this state to inform remote gdb
 
     return avr->state;
+}
+
+/* Clean-up function, called when window closed. */
+
+static void stop(void)
+{
+    if (vcd_fh)
+        fclose(vcd_fh);
+    avr_terminate(The_avr);
 }
 
 /* Open the VCD output file. */
