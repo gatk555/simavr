@@ -39,16 +39,25 @@ extern "C" {
 	enum : myfifo_overflow_f
 	type : myfifo_t
 	functions:
-		// write a byte into the fifo, return 1 if there was room, 0 if there wasn't
-		int myfifo_write(myfifo_t *c, uint8_t b);
-		// reads a byte from the fifo, return 0 if empty. Use myfifo_isempty() to check beforehand
-		uint8_t myfifo_read(myfifo_t *c);
+		// Check for full or empty.
 		int myfifo_isfull(myfifo_t *c);
 		int myfifo_isempty(myfifo_t *c);
+
+		// write a byte into the fifo, return 1 if there was room, 0 if there wasn't
+		int myfifo_write(myfifo_t *c, uint8_t b);
+
+		// reads a byte from the fifo, return 0 if empty. Use myfifo_isempty() to check beforehand
+		uint8_t myfifo_read(myfifo_t *c);
+
 		// returns number of items to read now
 		uint16_t myfifo_get_read_size(myfifo_t *c);
+
 		// read item at offset o from read cursor, no cursor advance
 		uint8_t myfifo_read_at(myfifo_t *c, uint16_t o);
+
+		// Advance read cursor by offset 0
+		void myfifo_read_offset(myfifo_t *c, uint16_t o);
+
 		// write b at offset o compared to current write cursor, no cursor advance
 		void myfifo_write_at(myfifo_t *c, uint16_t o, uint8_t b);
 
