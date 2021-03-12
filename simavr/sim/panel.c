@@ -22,16 +22,26 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <libgen.h>
 #include <dlfcn.h>
+#include <time.h>
 #include <sys/time.h>
 
 #include "blink/sim.h"
+
 #include "sim_avr.h"
 #include "sim_core.h"
 #include "sim_irq.h"
+#include "sim_elf.h"
 #include "sim_cycle_timers.h"
+#include "sim_vcd_file.h"
 #include "avr_ioport.h"
 #include "avr_adc.h"
+#include "sim_core_config.h"
+
+static avr_t *The_avr;  // Ugly
 
 /* Data structures to track the simulated MCU's I/O ports. */
 
@@ -40,7 +50,7 @@
 struct port {
     avr_t       *avr;
     avr_irq_t   *base_irq;
-    char         port_letter;
+    char         port_letter, vcd_letter;
     uint8_t      output, ddr, actual;
     uint8_t      sor;                                   // Stop indicator.
     struct port *handle_finder[HANDLES_PER_PORT];       // See push_val().
@@ -69,6 +79,7 @@ static unsigned int ADC_chan_pos, ADC_chan_neg;
 
 static unsigned int ADC_update_chan = ADC_CHANNEL_COUNT;
 static Sim_RH       ADC_update_handle;
+static char         ADC_vcd_letter;
 
 /* Blink handles associated with ports. */
 
@@ -89,6 +100,17 @@ static Sim_RH       ADC_update_handle;
 /* Make handles useable as case labels. */
 
 #define CS(x) ((intptr_t)(x))
+
+/* File handle and timestamp for VCD recording of input. */
+
+static FILE              *vcd_fh;
+static long unsigned int  Last_stamp = (long unsigned int)-1;
+
+/* Ugly way to avoid deadlock during VCD playback, perhaps the IRQ
+ * mechanism should be modified to eliminate this.
+ */
+
+static int Blink_input_active;
 
 /* Ask Blink for the number of cycles to simulate. */
 
@@ -210,11 +232,50 @@ static void d_out_notify(avr_irq_t *irq, uint32_t value, void *param)
     Bfp->new_value(PORT_HANDLE(pp, 0), pp->actual);
 }
 
+/* Notification of a pin change.  Used to display VCD input, but will
+ * also be called for output.
+ */
+
+static void vcd_in_notify(avr_irq_t *irq, uint32_t value, void *param)
+{
+    struct port *pp;
+    uint8_t      mask;
+
+    if (Blink_input_active)
+        return;
+    pp = (struct port *)param;
+    mask = (1 << irq->irq);
+    if ((mask & pp->ddr) == 0) {
+        /* VCD input. */
+
+        if (value)
+            pp->actual |= mask;
+        else
+            pp->actual &= ~mask;
+        Bfp->new_value(PORT_HANDLE(pp, 0), pp->actual);
+    }
+}
+
+/* Similarly for the ADC. */
+
+static void vcd_adc_in_notify(avr_irq_t *irq, uint32_t value, void *param)
+{
+    unsigned int channel;
+
+    if (Blink_input_active)
+        return;
+    channel = irq->irq;
+    Bfp->new_value(ADC_channel_pos_handle, channel);
+    Bfp->new_value(ADC_input_pos_handle, value);
+    if (channel == ADC_chan_neg)
+        Bfp->new_value(ADC_input_neg_handle, value);
+}
+
 /* New port bits from Blink. */
 
 static void port_input(struct port *pp, unsigned int value)
 {
-    unsigned int  changed, mask, dirty, i;
+    unsigned int             changed, mask, dirty, i;
 
     changed = value ^ pp->actual;
     if (changed) {
@@ -237,6 +298,21 @@ static void port_input(struct port *pp, unsigned int value)
                      */
 
                     avr_raise_irq(pp->base_irq + i, bit);
+                    if (vcd_fh) {
+                        avr_t             *avr;
+                        long unsigned int  stamp;
+
+                        /* Write it to VCD file. */
+
+                        avr = pp->avr;
+                        stamp = (avr->cycle * 100*1000*1000) / avr->frequency;
+                        if (stamp != Last_stamp) {
+                            fprintf(vcd_fh, "\n#%lu", stamp);
+                            Last_stamp = stamp;
+                        }
+                        fprintf(vcd_fh, " %c%c",
+                                bit + '0', pp->vcd_letter + i);
+                    }
                 }
                 if (!(changed ^= mask))
                     break;
@@ -248,9 +324,28 @@ static void port_input(struct port *pp, unsigned int value)
             fprintf(stderr,
                     "Dirty write %02x to port %c (DDR %02x actual %02x).",
                     value, pp->port_letter, pp->ddr, pp->actual);
+            pp->actual = (pp->output & pp->ddr) | (value & ~pp->ddr);
+        } else {
+            pp->actual = value;
         }
-        pp->actual = value;
     }
+}
+
+/* Write analogue input value to VCD file. */
+
+static void write_adc_vcd(unsigned int chan, unsigned int value)
+{
+    long unsigned int  stamp;
+
+    stamp = (The_avr->cycle * 100*1000*1000) / The_avr->frequency;
+    if (stamp != Last_stamp) {
+        fprintf(vcd_fh, "\n#%lu", stamp);
+        Last_stamp = stamp;
+    }
+
+    /* Using real, what is the correct VCD form for integers? */
+
+    fprintf(vcd_fh, " r%u %c", value, ADC_vcd_letter + chan);
 }
 
 /* Function called by Blink with new input values. */
@@ -260,6 +355,7 @@ static int push_val(Sim_RH handle, unsigned int value)
     struct port  *pp, **ppp;
     uintptr_t     handle_type;
 
+    Blink_input_active = 1;
     handle_type = (uintptr_t)handle;
     if (handle_type <= 'Z') {
         switch (handle_type) {
@@ -277,6 +373,8 @@ static int push_val(Sim_RH handle, unsigned int value)
                 ADC_update_chan = ADC_chan_pos;
                 ADC_update_handle = ADC_input_neg_handle;
             }
+            if (vcd_fh)
+                write_adc_vcd(ADC_chan_pos, value);
             break;
         case CS(ADC_channel_pos_handle):
             if (value < ADC_CHANNEL_COUNT) {
@@ -293,6 +391,8 @@ static int push_val(Sim_RH handle, unsigned int value)
                 ADC_update_chan = ADC_chan_pos;
                 ADC_update_handle = ADC_input_pos_handle;
             }
+            if (vcd_fh)
+                write_adc_vcd(ADC_chan_neg, value);
             break;
         case CS(ADC_channel_neg_handle):
             if (value < ADC_CHANNEL_COUNT) {
@@ -310,6 +410,7 @@ static int push_val(Sim_RH handle, unsigned int value)
 
         /* Immediate return from Blink_run_control() if ADC channel changed.*/
 
+        Blink_input_active = 0;
         return ADC_update_chan < ADC_CHANNEL_COUNT;
     }
 
@@ -338,6 +439,7 @@ static int push_val(Sim_RH handle, unsigned int value)
         }
         break;
     }
+    Blink_input_active = 0;
     return 0;
 }
 
@@ -392,6 +494,43 @@ static int my_avr_run(avr_t *avr)
     return avr->state;
 }
 
+/* Open the VCD output file. */
+
+static void start_vcd(avr_vcd_t *vcd, elf_firmware_t *fwp,
+                      const char *firmware)
+{
+    time_t now;
+    int    len;
+    char   fn_buf[256];
+
+
+    /* File name is given VCD output file, less any 3-letter extension,
+     * with "_input.vcd" appended.
+     */
+
+    len = snprintf(fn_buf, sizeof fn_buf - 10, "%s", vcd->filename);
+    if (len > 4 && fn_buf[len - 4] == '.')
+        len -= 4;
+    strcpy(fn_buf + len, "_input.vcd");
+    vcd_fh = fopen(fn_buf, "w");
+    if (!vcd_fh) {
+        fprintf(stderr,
+                "Failed to open file %s for recording panel input: %s\n",
+                fn_buf, strerror(errno));
+        return;
+    }
+
+    time(&now);
+    fprintf(vcd_fh, "$date %s$end\n", ctime(&now));
+    fprintf(vcd_fh, "$version Simavr " CONFIG_SIMAVR_VERSION " $end\n");
+    fprintf(vcd_fh,
+            "$comment\n"
+            "  Control panel input to %s for simavr processor %s.\n"
+            "$end\n",
+            firmware, fwp->mmcu);
+    fprintf(vcd_fh, "$timescale 10ns $end\n$scope module EXTERNAL $end\n");
+}
+
 /* Create a displayed register for a port. */
 
 static void port_reg(char port_letter, struct port *pp)
@@ -427,13 +566,18 @@ static void show_adc(void)
  * Return 0 on failure, 1 for success.
  */
 
-int Run_with_panel(avr_t *avr)
+int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
+                   int vcd_input)
 {
     void        *handle;
     struct port *pp;
     Blink_RH     row;
-    int          state;
-    char         port_letter;
+    int          state, len, i;
+    char         port_letter, vcd_letter;
+    char        *fwcp;
+    char         wn[64];
+
+    The_avr = avr;
 
     /* Load the Blink library. This is a dynamic load because Blink
      * should not be a hard pre-requisite for simavr.
@@ -454,7 +598,14 @@ int Run_with_panel(avr_t *avr)
         return 0;
     }
 
-    if (!Bfp->init("simavr", (struct simulator_calls *)&blink_callbacks))
+    /* Work out the window name. */
+
+    fwcp = strdup(firmware);
+    len = snprintf(wn, sizeof wn, "%s: %s", fwp->mmcu, basename(fwcp));
+    free(fwcp);
+    if (len > 4 && wn[len - 4] == '.')
+        wn[len - 4] = '\0';
+    if (!Bfp->init(wn, (struct simulator_calls *)&blink_callbacks))
         return 0;
 
     /* Display simulated PC and cycle count. */
@@ -466,11 +617,18 @@ int Run_with_panel(avr_t *avr)
                       RO_INSENSITIVE | RO_STYLE_HEX, row);
     Bfp->close_row(row);
 
+    /* Check for VCD output. */
+
+    if (avr->vcd) {
+        start_vcd(avr->vcd, fwp, firmware);
+        vcd_letter = '!';
+    }
+
     /* Scan the AVR for GPIO ports and create a display register of each. */
 
     for (port_letter = 'A'; port_letter <= 'Z'; ++port_letter) {
         avr_irq_t *base_irq;
-        uint32_t   ioctl, i;
+        uint32_t   ioctl;
 
         ioctl = (uint32_t)AVR_IOCTL_IOPORT_GETIRQ(port_letter);
         base_irq = avr_io_getirq(avr, ioctl, 0);
@@ -498,15 +656,68 @@ int Run_with_panel(avr_t *avr)
             /* Display the port and DDR for now. */
 
             port_reg(port_letter, pp);
+
+            /* If there is a VCD input file, connect to the IRQs
+             * that will push its data into the simulation.
+             */
+
+            if (vcd_input) {
+                for (i = 0; i < 8; ++i)
+                    avr_irq_register_notify(base_irq + i, vcd_in_notify, pp);
+            }
+
+            /* VCD variable definitions.
+             * The "readable" name contains a simavr ioctl.
+             */
+
+            if (vcd_fh && vcd_letter <= 120) {
+                pp->vcd_letter = vcd_letter;
+                for (i = 0; i < 8; ++i, ++vcd_letter) {
+                    fprintf(vcd_fh, "$var wire 1 %c iog%c_%d $end\n",
+                            vcd_letter, pp->port_letter, i);
+                }
+            } else {
+                pp->vcd_letter = 0;
+            }
         }
     }
 
     /* ADC set-up. */
 
     ADC_base_irq = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, 0);
-    avr_irq_register_notify(ADC_base_irq + ADC_IRQ_OUT_TRIGGER,
-                            adc_read_notify, avr);
-    show_adc();
+    if (ADC_base_irq) {
+        avr_irq_register_notify(ADC_base_irq + ADC_IRQ_OUT_TRIGGER,
+                                adc_read_notify, avr);
+        show_adc();
+        if (vcd_fh && vcd_letter < 127) {
+            unsigned int limit;
+
+            limit = 127 - vcd_letter;
+            if (limit > ADC_CHANNEL_COUNT)
+                limit = ADC_CHANNEL_COUNT;
+            ADC_vcd_letter = vcd_letter;
+            for (i = 0; i < limit; ++i, ++vcd_letter) {
+                fprintf(vcd_fh, "$var real 32 %c adc0_%d $end\n",
+                        vcd_letter, i);
+            }
+        }
+
+        /* If there is a VCD input file, connect to the IRQs
+         * that will push its data into the simulation.
+         */
+
+        if (vcd_input) {
+            for (i = 0; i < ADC_CHANNEL_COUNT; ++i) {
+                avr_irq_register_notify(ADC_base_irq + i, vcd_adc_in_notify,
+                                        NULL);
+            }
+        }
+    }
+
+    /* Complete VCD header. */
+
+    if (vcd_fh)
+        fprintf(vcd_fh, "$upscope $end\n$enddefinitions $end\n");
 
     /* Run. */
 
