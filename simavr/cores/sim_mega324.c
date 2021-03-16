@@ -26,7 +26,7 @@
 
 #define _AVR_IO_H_
 #define __ASSEMBLER__
-#include "avr/iom324.h"
+#include "avr/iom324a.h"
 
 /* borken avr-libc missing these declarations :/ */
 /* The one from 324a are also wrong, like, I'm embarassed for whomever

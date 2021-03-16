@@ -39,6 +39,14 @@ void m128rfa1_reset(struct avr_t * avr);
 
 #define _AVR_IO_H_
 #define __ASSEMBLER__
+
+/* This suppresses inclusion of sfr_defs.h in the header file
+ * iom128rfa1.h (below).  That would otherwise import
+ * definitions that conflict with sim_core_declare.h.
+ */
+
+#define _AVR_SFR_DEFS_H_ 1
+
 #include "avr/iom128rfa1.h"
 
 #include "sim_core_declare.h"
