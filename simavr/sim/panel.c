@@ -497,29 +497,38 @@ static int my_avr_run(avr_t *avr)
     return avr->state;
 }
 
+/* Clean-up function, called by simavr when simulation has finished. */
+
+static void panel_close(avr_t *avr, void *data)
+{
+    if (vcd_fh)
+        fclose(vcd_fh);
+    vcd_fh = NULL;
+}
+
 /* Clean-up function, called when window closed. */
 
 static void stop(void)
 {
-    if (vcd_fh)
-        fclose(vcd_fh);
     avr_terminate(The_avr);
 }
 
 /* Open the VCD output file. */
 
-static void start_vcd(avr_vcd_t *vcd, elf_firmware_t *fwp,
+static void start_vcd(avr_t *avr, elf_firmware_t *fwp,
                       const char *firmware)
 {
-    time_t now;
-    int    len;
-    char   fn_buf[256];
+    avr_vcd_t *vcd;
+    time_t     now;
+    int        len;
+    char       fn_buf[256];
 
 
     /* File name is given VCD output file, less any 3-letter extension,
      * with "_input.vcd" appended.
      */
 
+    vcd = avr->vcd;
     len = snprintf(fn_buf, sizeof fn_buf - 10, "%s", vcd->filename);
     if (len > 4 && fn_buf[len - 4] == '.')
         len -= 4;
@@ -531,6 +540,12 @@ static void start_vcd(avr_vcd_t *vcd, elf_firmware_t *fwp,
                 fn_buf, strerror(errno));
         return;
     }
+
+    /* Request callback at simulation end. */
+
+    avr->custom.deinit = panel_close;
+
+    /* Write VCD file header. */
 
     time(&now);
     fprintf(vcd_fh, "$date %s$end\n", ctime(&now));
@@ -632,7 +647,7 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
     /* Check for VCD output. */
 
     if (avr->vcd) {
-        start_vcd(avr->vcd, fwp, firmware);
+        start_vcd(avr, fwp, firmware);
         vcd_letter = '!';
     }
 
