@@ -281,12 +281,14 @@ int main(int argc, char *argv[])
 	 */
 	avr_vcd_init(avr, "gtkwave_output.vcd", &vcd_file, 10000 /* usec */);
 
+#ifdef IRQ_IRQS
 	avr_vcd_add_signal(&vcd_file, 
 		avr_get_interrupt_irq(avr, 7), 1 /* bit */ ,
 		"TIMER2_COMPA" );
 	avr_vcd_add_signal(&vcd_file, 
 		avr_get_interrupt_irq(avr, 17), 1 /* bit */ ,
 		"SPI_INT" );
+#endif
 	avr_vcd_add_signal(&vcd_file, 
 		i_mosi, 8 /* bits */ ,
 		"MOSI" );

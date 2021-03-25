@@ -128,6 +128,7 @@ avr_load_firmware(
 					firmware->trace[ti].name[0] ?
 						firmware->trace[ti].name : name);
 			}
+#if IRQ_IRQS
 		} else if (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_IRQ) {
 			avr_irq_t * bit = avr_get_interrupt_irq(avr, firmware->trace[ti].mask);
 			if (bit && firmware->trace[ti].addr < AVR_INT_IRQ_COUNT)
@@ -135,6 +136,7 @@ avr_load_firmware(
 						&bit[firmware->trace[ti].addr],
 						firmware->trace[ti].mask == 0xff ? 8 : 1,
 						firmware->trace[ti].name);
+#endif
 		} else if (firmware->trace[ti].mask == 0xff ||
 				firmware->trace[ti].mask == 0) {
 			// easy one

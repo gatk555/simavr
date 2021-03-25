@@ -2,6 +2,7 @@
 	sim_interrupts.c
 
 	Copyright 2008-2012 Michel Pollet <buserror@gmail.com>
+	Copyright 2021 Giles Atkinson
 
  	This file is part of simavr.
 
@@ -28,19 +29,13 @@
 #include "sim_avr.h"
 #include "sim_core.h"
 
-DEFINE_FIFO(avr_int_vector_p, avr_int_pending);
-
 void
 avr_interrupt_init(
 		avr_t * avr )
 {
 	avr_int_table_p table = &avr->interrupts;
-	memset(table, 0, sizeof(*table));
 
-	static const char *names[] = { ">avr.int.pending", ">avr.int.running" };
-	avr_init_irq(&avr->irq_pool, table->irq,
-			0, // base number
-			AVR_INT_IRQ_COUNT, names);
+	memset(table, 0, sizeof(*table));
 }
 
 void
@@ -49,11 +44,15 @@ avr_interrupt_reset(
 {
 	avr_int_table_p table = &avr->interrupts;
 
-	table->running_ptr = 0;
-	avr_int_pending_reset(&table->pending);
 	avr->interrupt_state = 0;
-	for (int i = 0; i < table->vector_count; i++)
-		table->vector[i]->pending = 0;
+	table->pending_count = 0;
+	table->next_vector = 0;
+	for (int i = 0; i < table->max_vector; i++) {
+		if (table->vectors[i]) {
+			table->vectors[i]->pending = 0;
+			table->vectors[i]->level = 0;
+		}
+	}
 }
 
 void
@@ -61,34 +60,40 @@ avr_register_vector(
 		avr_t *avr,
 		avr_int_vector_t * vector)
 {
-	if (!vector->vector)
-		return;
-
 	avr_int_table_p table = &avr->interrupts;
+	uint8_t 	vec_num = vector->vector;
 
-	char name0[48], name1[48];
-	sprintf(name0, ">avr.int.%02x.pending", vector->vector);
-	sprintf(name1, ">avr.int.%02x.running", vector->vector);
-	const char *names[2] = { name0, name1 };
-	avr_init_irq(&avr->irq_pool, vector->irq,
-			vector->vector * 256, // base number
-			AVR_INT_IRQ_COUNT, names);
-	table->vector[table->vector_count++] = vector;
+	if (!vec_num)
+		return;
+	if (vec_num >= MAX_VECTOR_COUNT) {
+		fprintf(stderr,
+			"Vector %d out-of range in avr_register_vector()\n",
+			vec_num);
+		return;
+	}
+	if (table->vectors[vec_num]) {
+		fprintf(stderr,
+			"Attempted double registration of interrupt vector %d "
+			"ignored.\n",
+			vec_num);
+		return;
+	}
+	table->vectors[vec_num] = vector;
+	if (table->max_vector < vec_num)
+		table->max_vector = vec_num;
 	if (vector->trace)
 		printf("IRQ%d registered (enabled %04x:%d)\n",
-			vector->vector, vector->enable.reg, vector->enable.bit);
-
+			vec_num, vector->enable.reg, vector->enable.bit);
 	if (!vector->enable.reg)
 		AVR_LOG(avr, LOG_WARNING, "IRQ%d No 'enable' bit !\n",
-			vector->vector);
+			vec_num);
 }
 
 int
 avr_has_pending_interrupts(
 		avr_t * avr)
 {
-	avr_int_table_p table = &avr->interrupts;
-	return !avr_int_pending_isempty(&table->pending);
+	return avr->interrupts.pending_count;
 }
 
 int
@@ -112,50 +117,62 @@ avr_raise_interrupt(
 		avr_t * avr,
 		avr_int_vector_t * vector)
 {
-	if (!vector || !vector->vector)
-		return 0;
+	uint8_t vec_num;
 
-	if (vector->trace)
+	if (!vector)
+		return 0;
+	vec_num = vector->vector;
+	if (!vec_num)
+		return 0;
+	if (vector->trace) {
 		printf("IRQ%d raising (enabled %d)\n",
-			vector->vector, avr_regbit_get(avr, vector->enable));
+			vec_num, avr_regbit_get(avr, vector->enable));
+	}
 
 	// always mark the 'raised' flag to one, even if the interrupt is disabled
 	// this allow "polling" for the "raised" flag, like for non-interrupt
 	// driven UART and so so. These flags are often "write one to clear"
+
 	if (vector->raised.reg)
 		avr_regbit_set(avr, vector->raised);
 
 	if (vector->pending) {
-		if (vector->trace)
-			printf("IRQ%d:I=%d already raised (enabled %d) (cycle %lld pc 0x%x)\n",
-				vector->vector, !!avr->sreg[S_I], avr_regbit_get(avr, vector->enable),
+		if (vector->trace) {
+			printf("IRQ%d: I=%d already raised (enabled %d) "
+			       "(cycle %lld pc 0x%x)\n",
+			       vec_num, !!avr->sreg[S_I],
+			       avr_regbit_get(avr, vector->enable),
 				(long long int)avr->cycle, avr->pc);
-
-        return 0;
+		}
+		return 0;
 	}
 
-	avr_raise_irq(vector->irq + AVR_INT_IRQ_PENDING, 1);
-	avr_raise_irq(avr->interrupts.irq + AVR_INT_IRQ_PENDING, 1);
-
 	// If the interrupt is enabled, attempt to wake the core
-	if (avr_regbit_get(avr, vector->enable)) {
-		// Mark the interrupt as pending
-		vector->pending = 1;
 
+	if (avr_regbit_get(avr, vector->enable)) {
 		avr_int_table_p table = &avr->interrupts;
 
-		avr_int_pending_write(&table->pending, vector);
+		// Mark the interrupt as pending.
+
+		vector->pending = 1;
+
+		/* Priority policy here. */
+
+		if (table->pending_count++ == 0 ||
+		    vec_num < table->next_vector ||
+		    table->next_vector == 0) {
+			table->next_vector = vec_num;
+		}
 
 		if (avr->sreg[S_I] && avr->interrupt_state == 0)
 			avr->interrupt_state = 1;
 		if (avr->state == cpu_Sleeping) {
 			if (vector->trace)
 				printf("IRQ%d Waking CPU due to interrupt\n",
-					vector->vector);
-			avr->state = cpu_Running;	// in case we were sleeping
+					vec_num);
+			avr->state = cpu_Running;
 		}
 	}
-	// return 'raised' even if it was already pending
 	return 1;
 }
 
@@ -164,21 +181,48 @@ avr_clear_interrupt(
 		avr_t * avr,
 		avr_int_vector_t * vector)
 {
+	avr_int_table_p table = &avr->interrupts;
+	uint8_t 	vec_num;
+
 	if (!vector)
 		return;
+	vec_num = vector->vector;
+	if (vec_num == 0)
+		return;
 	if (vector->trace)
-		printf("IRQ%d cleared\n", vector->vector);
-	vector->pending = 0;
-
-	avr_raise_irq(vector->irq + AVR_INT_IRQ_PENDING, 0);
-	avr_raise_irq_float(avr->interrupts.irq + AVR_INT_IRQ_PENDING,
-			avr_has_pending_interrupts(avr) ?
-					avr_int_pending_read_at(
-							&avr->interrupts.pending, 0)->vector : 0,
-							!avr_has_pending_interrupts(avr));
-
+		printf("IRQ%d cleared\n", vec_num);
 	if (vector->raised.reg && !vector->raise_sticky)
 		avr_regbit_clear(avr, vector->raised);
+	if (!vector->pending)
+		return;
+	vector->pending = 0;
+
+	// Bookeeping.
+
+	if (--table->pending_count > 0 && table->next_vector == vec_num) {
+		int i;
+
+		/* Locate highest-priority pending interrupt. */
+
+		for (i = vec_num + 1; i <= table->max_vector; ++i) {
+			if (table->vectors[i] == NULL)
+				continue;
+			if (table->vectors[i]->pending) {
+				table->next_vector = i;
+				break;
+			}
+		}
+		if (i > table->max_vector) {
+			fprintf(stderr,
+				"Internal error: interrupt not found. (%d)\n",
+				table->pending_count);
+			table->pending_count = 0;
+		}
+	} else if (table->pending_count == 0) {
+		table->next_vector = 0;
+		if (avr->interrupt_state > 0)
+			avr->interrupt_state = 0;
+	}
 }
 
 int
@@ -187,8 +231,6 @@ avr_clear_interrupt_if(
 		avr_int_vector_t * vector,
 		uint8_t old)
 {
-	avr_raise_irq(avr->interrupts.irq + AVR_INT_IRQ_PENDING,
-			avr_has_pending_interrupts(avr));
 	if (avr_regbit_get(avr, vector->raised)) {
 		avr_clear_interrupt(avr, vector);
 		return 1;
@@ -197,98 +239,86 @@ avr_clear_interrupt_if(
 	return 0;
 }
 
+/* To be removed, now that the IRQs are gone.  Or retained for return? FIX */
+
+#ifdef IRQ_IRQS
 avr_irq_t *
 avr_get_interrupt_irq(
 		avr_t * avr,
 		uint8_t v)
 {
-	avr_int_table_p table = &avr->interrupts;
-	if (v == AVR_INT_ANY)
-		return table->irq;
-	for (int i = 0; i < table->vector_count; i++)
-		if (table->vector[i]->vector == v)
-			return table->vector[i]->irq;
 	return NULL;
 }
+#endif
 
-/* this is called uppon RETI. */
+/* This is called upon RETI. */
+
 void
 avr_interrupt_reti(
 		struct avr_t * avr)
 {
-	avr_int_table_p table = &avr->interrupts;
-	if (table->running_ptr) {
-		avr_int_vector_t * vector = table->running[--table->running_ptr];
-		avr_raise_irq(vector->irq + AVR_INT_IRQ_RUNNING, 0);
-	}
-	avr_raise_irq(table->irq + AVR_INT_IRQ_RUNNING,
-			table->running_ptr > 0 ?
-					table->running[table->running_ptr-1]->vector : 0);
-	avr_raise_irq(avr->interrupts.irq + AVR_INT_IRQ_PENDING,
-			avr_has_pending_interrupts(avr));
+//	avr_int_table_p table = &avr->interrupts;
+
+	/* Move setting of S_I here? FIX */
 }
 
-/*
- * check whether interrupts are pending. If so, check if the interrupt "latency" is reached,
+/* Check whether interrupts are pending.
+ * If so, check if the interrupt "latency" is reached,
  * and if so triggers the handlers and jump to the vector.
  */
+
 void
 avr_service_interrupts(
 		avr_t * avr)
 {
-	if (!avr->sreg[S_I] || !avr->interrupt_state)
-		return;
+	avr_int_table_p   table = &avr->interrupts;
+	avr_int_vector_t *vp;
 
+        if (!avr->interrupt_state)
+		return;
 	if (avr->interrupt_state < 0) {
-		avr->interrupt_state++;
-		if (avr->interrupt_state == 0)
-			avr->interrupt_state = avr_has_pending_interrupts(avr);
+		if (++avr->interrupt_state == 0)
+			avr->interrupt_state = table->pending_count;
 		return;
 	}
 
-	avr_int_table_p table = &avr->interrupts;
+	if (!avr->sreg[S_I]) {
+            avr->interrupt_state = 0;
+            return;
+        }
 
-	// how many are pending...
-	int cnt = avr_int_pending_get_read_size(&table->pending);
-	// locate the highest priority one
-	int min = 0xff;
-	int mini = 0;
-	for (int ii = 0; ii < cnt; ii++) {
-		avr_int_vector_t * v = avr_int_pending_read_at(&table->pending, ii);
-		if (v->vector < min) {
-			min = v->vector;
-			mini = ii;
-		}
+	/* Some sanity checks, maybe temporary. */
+
+        if (table->pending_count == 0 || table->next_vector == 0) {
+		fprintf(stderr, "Internal error: no active interrupt: %d/%d\n",
+			table->pending_count, table->next_vector);
+                table->pending_count = (table->next_vector != 0); // Try it.
 	}
-	avr_int_vector_t * vector = avr_int_pending_read_at(&table->pending, mini);
 
-	// now move the one at the front of the fifo in the slot of
-	// the one we service
-	table->pending.buffer[(table->pending.read + mini) % avr_int_pending_fifo_size] =
-			avr_int_pending_read(&table->pending);
-	avr_raise_irq(avr->interrupts.irq + AVR_INT_IRQ_PENDING,
-			avr_has_pending_interrupts(avr));
+	vp = table->vectors[table->next_vector];
 
-	// if that single interrupt is masked, ignore it and continue
-	// could also have been disabled, or cleared
-	if (!avr_regbit_get(avr, vector->enable) || !vector->pending) {
-		vector->pending = 0;
-		avr->interrupt_state = avr_has_pending_interrupts(avr);
+	// If that single interrupt is masked, ignore it and continue
+	// could also have been disabled, or cleared.
+
+	if ((vp->enable.reg && !avr_regbit_get(avr, vp->enable)) ||
+	    (vp->raised.reg && !avr_regbit_get(avr, vp->raised)) ||
+	    !vp->pending) {
+		fprintf(stderr, "Internal error: interrupt flags: %d/%d/%d\n",
+			avr_regbit_get(avr, vp->enable),
+			avr_regbit_get(avr, vp->raised),
+			vp->pending);
 	} else {
-		if (vector->trace)
-			printf("IRQ%d calling\n", vector->vector);
-		_avr_push_addr(avr, avr->pc);
+		if (vp->trace)
+			printf("IRQ%d calling\n", vp->vector);
+		avr->cycle += _avr_push_addr(avr, avr->pc);
 		avr_sreg_set(avr, S_I, 0);
-		avr->pc = vector->vector * avr->vector_size;
+		avr->pc = vp->vector * avr->vector_size;
+	}
 
-		avr_raise_irq(vector->irq + AVR_INT_IRQ_RUNNING, 1);
-		avr_raise_irq(table->irq + AVR_INT_IRQ_RUNNING, vector->vector);
-		if (table->running_ptr == ARRAY_SIZE(table->running)) {
-			AVR_LOG(avr, LOG_ERROR, "%s run out of nested stack!", __func__);
-		} else {
-			table->running[table->running_ptr++] = vector;
-		}
-		avr_clear_interrupt(avr, vector);
+	if (!vp->level) {
+		avr_clear_interrupt(avr, vp);
+		if (vp->clear_both && vp->enable.reg) // Used by watchdog.
+			avr_regbit_clear(avr, vp->enable);
 	}
 }
 

@@ -169,24 +169,6 @@ static int avr_watchdog_ioctl(
 	return res;
 }
 
-static void avr_watchdog_irq_notify(
-		struct avr_irq_t * irq,
-		uint32_t value,
-		void * param)
-{
-	avr_watchdog_t * p = (avr_watchdog_t *)param;
-	avr_t * avr = p->io.avr;
-
-	/* interrupt handling calls this twice...
-	 * first when raised (during queuing), value = 1
-	 * again when cleared (after servicing), value = 0
-	 */
-
-	if (!value && avr_regbit_get(avr, p->watchdog.raised)) {
-		avr_regbit_clear(avr, p->watchdog.enable);
-	}
-}
-		
 static void avr_watchdog_reset(avr_io_t * port)
 {
 	avr_watchdog_t * p = (avr_watchdog_t *)port;
@@ -206,9 +188,6 @@ static void avr_watchdog_reset(avr_io_t * port)
 		
 		avr_watchdog_set_cycle_count_and_timer(avr, p, 0, 0);
 	}
-	/* TODO could now use the two pending/running IRQs to do the same
-	 * as before */
-	avr_irq_register_notify(p->watchdog.irq, avr_watchdog_irq_notify, p);
 }
 
 static	avr_io_t	_io = {
@@ -222,6 +201,13 @@ void avr_watchdog_init(avr_t * avr, avr_watchdog_t * p)
 	p->io = _io;
 
 	avr_register_io(avr, &p->io);
+
+	/* Force the clear_both flag on in the interrupt structure
+	 * to get the special behaviour of clearing both enable and
+	 * interrupt flags on interruption.
+	 */
+
+	p->watchdog.clear_both = 1;
 	avr_register_vector(avr, &p->watchdog);
 
 	avr_register_io_write(avr, p->wdce.reg, avr_watchdog_write, p);

@@ -300,10 +300,10 @@ main(
 		avr->pc = f.flashbase;
 	}
 	for (int ti = 0; ti < trace_vectors_count; ti++) {
-		for (int vi = 0; vi < avr->interrupts.vector_count; vi++)
-			if (avr->interrupts.vector[vi]->vector ==
+		for (int vi = 0; vi <= avr->interrupts.max_vector; vi++)
+			if (avr->interrupts.vectors[vi]->vector ==
                             trace_vectors[ti]) {
-				avr->interrupts.vector[vi]->trace = 1;
+				avr->interrupts.vectors[vi]->trace = 1;
                         }
 	}
 	if (vcd_input) {

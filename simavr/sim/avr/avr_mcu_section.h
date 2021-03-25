@@ -212,6 +212,7 @@ struct avr_mmcu_vcd_trace_t {
 		.name = _name, \
 	}
 
+#if IRQ_IRQS
 /*!
  * These allows you to add a trace showing how long an IRQ vector is pending,
  * and also how long it is running. You can specify the IRQ as a vector name
@@ -234,6 +235,7 @@ struct avr_mmcu_vcd_trace_t {
 	AVR_MCU_VCD_IRQ_TRACE(0xff, 1, "IRQ")
 #define AVR_MCU_VCD_ALL_IRQ_PENDING() \
 	AVR_MCU_VCD_IRQ_TRACE(0xff, 0, "IRQ_PENDING")
+#endif
 
 /*!
  * This tag allows you to specify the voltages used by your board
