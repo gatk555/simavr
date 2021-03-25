@@ -1,0 +1,3 @@
+# Run the demo firmware for the control panal.  Linux-specific.
+
+LD_LIBRARY_PATH=../../simavr/obj-x86_64-linux-gnu/:../../simavr/sim/blink ../../simavr/run_avr -p -o test.vcd atmega328p_demo_panel.axf

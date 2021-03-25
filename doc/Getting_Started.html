@@ -1,16 +1,8 @@
-This repository is a fork from the original [here.](https://github.com/buserror/simavr)
-
-New Features
-------------
-At the time of writing (March 2021) this fork contains some new or updated items.
-
-+ A brief "Getting Started" guide, intended for new users.  See below, but the
-HTML file in the doc directory looks better.  Github's HTML processing is a little off.
-+ A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
-+ Improvements to the ADC, particularly attinyX5.
-+ Some additional tests.
-+ Miscellaneous bug fixes.
-
+<HTML>
+<TITLE>
+Getting started with simavr.
+</TITLE>
+<BODY style="max-width:700px; margin:auto;">
 <H3>Getting Started with Simavr. </H3>
 This is a guide to getting started with,
 <A href="https://github.com/buserror/simavr">
@@ -53,7 +45,7 @@ An easy way to get your firmware compiled and running
 with <I>gcc-avr</I> is to create a new sub-directory of
 <I>simavr/examples</I>
 containing your firmware source and a simple Makefile
-<A href=./examples/panel/Makefile>like this one.</A>
+<A href=../examples/panel/Makefile>like this one.</A>
 The simavr convention is that C source files with names beginning
 "attiny" or "atmega" are firmware and the first component of the name
 identifies the target AVR part
@@ -130,7 +122,7 @@ fork that contains this file has an additional option
 that displays an interactive control panel,
 allowing you to control firmware execution, view output and provide inputs.
 
-<p><img src="./doc/img/panel.png" alt="Image of simavr window" style="display: block; margin-left: auto;  margin-right: auto;"/></p>
+<p><img src="./img/panel.png" alt="Image of simavr window" style="display: block; margin-left: auto;  margin-right: auto;"/></p>
 
 At the top of the window is the "Clock" sub-panel that controls execution:
 "Run" is a toggle button to start and stop execution,
@@ -564,3 +556,5 @@ Interrupts can be raised with
 <I>avr_raise_interrupt()</I>
 and controlled using other functions defined in
 <I>sim_interrupts.h.</I>
+</BODY>
+</HTML>  
