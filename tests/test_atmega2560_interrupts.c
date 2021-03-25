@@ -23,7 +23,7 @@ avr_cycle_count_t starting(avr_t *avr, avr_cycle_count_t when, void *param)
 
 int main(int argc, char **argv) {
     static const char *expected =
-        " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUV| 18\r\n";
+        " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUV| 9\r\n";
     avr_t             *avr;
 
     tests_init(argc, argv);
