@@ -45,6 +45,9 @@ typedef struct avr_regbit_t {
 	uint32_t reg : 9, bit : 3, mask : 8;
 } avr_regbit_t;
 
+#define REGBIT_EQUAL(a, b) \
+	(a.reg == b.reg && a.bit == b.bit && a.mask == b.mask)
+
 // printf() conversion specifier for avr_cycle_count_t
 #define PRI_avr_cycle_count PRIu64
 

@@ -85,7 +85,7 @@ int main()
     PORTJ = 0x01;                  // Interrupt
     cli();
     buffer[interrupts++] = ' ';
-//    PORTE = 0xff; // Fails! Double interrupt after sei().
+    PORTE = 0xff;
     PORTJ = 0xff;
     sei();                         // Only one interrupt
     PORTK = 0x80;                  // No interrupt;

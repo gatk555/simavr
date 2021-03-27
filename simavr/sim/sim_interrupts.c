@@ -29,6 +29,11 @@
 #include "sim_avr.h"
 #include "sim_core.h"
 
+/* Macro to handle the indirect bit. */
+
+#define INDIRECT(v) \
+	if ((v)->indirect) (v) = avr->interrupts.vectors[(v)->vector]
+
 void
 avr_interrupt_init(
 		avr_t * avr )
@@ -55,6 +60,8 @@ avr_interrupt_reset(
 	}
 }
 
+/* Peripherals call this to claim their vectors. */
+
 void
 avr_register_vector(
 		avr_t *avr,
@@ -72,6 +79,22 @@ avr_register_vector(
 		return;
 	}
 	if (table->vectors[vec_num]) {
+		avr_int_vector_t *old;
+
+		/* Request for a vector already in use. 
+		 * It may be legitamate, as for the odd shared pin-change
+		 * interrupt of the ATmega2560.
+		 */
+
+		old = table->vectors[vec_num];
+		if (REGBIT_EQUAL(old->enable, vector->enable) &&
+		    REGBIT_EQUAL(old->raised, vector->raised) &&
+		    old->raise_sticky == vector->raise_sticky) {
+			/* Vector will be replaced by old when used. */
+
+			vector->indirect = 1;
+			return;
+		}
 		fprintf(stderr,
 			"Attempted double registration of interrupt vector %d "
 			"ignored.\n",
@@ -101,6 +124,7 @@ avr_is_interrupt_pending(
 		avr_t * avr,
 		avr_int_vector_t * vector)
 {
+	INDIRECT(vector);
 	return vector->pending;
 }
 
@@ -124,6 +148,7 @@ avr_raise_interrupt(
 	vec_num = vector->vector;
 	if (!vec_num)
 		return 0;
+	INDIRECT(vector);
 	if (vector->trace) {
 		printf("IRQ%d raising (enabled %d)\n",
 			vec_num, avr_regbit_get(avr, vector->enable));
@@ -189,6 +214,7 @@ avr_clear_interrupt(
 	vec_num = vector->vector;
 	if (vec_num == 0)
 		return;
+	INDIRECT(vector);
 	if (vector->trace)
 		printf("IRQ%d cleared\n", vec_num);
 	if (vector->raised.reg && !vector->raise_sticky)

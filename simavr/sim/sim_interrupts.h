@@ -35,16 +35,12 @@ extern "C" {
 typedef struct avr_int_vector_t {
 	uint8_t 	vector;	// vector number, zero (reset) is reserved
 	uint8_t		pending : 1, 	    // Wants to run.
-			trace : 1,	    // For debug.
 			level : 1,          // Level-triggered.
+			indirect : 1,       // Handle duplicates
+			trace : 1,	    // For debug.
 			raise_sticky : 1,   // Do not auto-clear .raised.
 			clear_both : 1;     // Auto-clear .enable as well.
 
-	// Mask and shift for PCINTs.  This is needed for chips like the 2560
-	// where PCINT do not align with IRQs.
-
-	uint8_t 	mask;
-	int8_t 		shift;
 	avr_regbit_t 	enable;	// Peripheral's interrupt enable bit.
 	avr_regbit_t 	raised;	// Peripheral's interrupt flag  bit.
 } avr_int_vector_t, *avr_int_vector_p;
