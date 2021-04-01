@@ -47,7 +47,7 @@ with <I>gcc-avr</I> is to create a new sub-directory of
 containing your firmware source and a simple Makefile
 <A href=../examples/panel/Makefile>like this one.</A>
 The simavr convention is that C source files with names beginning
-"attiny" or "atmega" are firmware and the first component of the name
+"attiny" or "atmega" are firmware: the first component of the name
 identifies the target AVR part
 and is used to select the appropriate compiler options.
 If your new directory has a name beginning "board_",
@@ -147,7 +147,7 @@ otherwise they are visible but not sent.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file
-that can be played back later with <I>"--panel"</I>.
+that can be played back later with <I>"--input"</I>.
 This may be useful for creating test data files and demonstrations.
 Playback can be combined with additional interactive input.
 <P>
@@ -159,10 +159,10 @@ Its source can be found in the
 <I>gatk555/blink</I>
 </A>
  repository.
-To build the version with the panel make a symbolic link to the blink
-source directory:
+To build the version with the panel,
+make a symbolic link to the blink source directory:
 <I>simavr/simavr/sim/blink</I>
-or put the blink source there.
+or use a real directory and put the blink source or outputs there.
 
 <H4>Using <I>libsimavr</I>.</H4>
 If you are developing new code to work with <I>libsimavr</I>,
@@ -343,7 +343,7 @@ if (base_irq != NULL) {
 The handler combines input and output values to produce a single byte value
 for display.
 This takes advantage of two additional features of IRQs:
-each peripeheral IRQ includes its own selector value
+each peripheral IRQ includes its own selector value
 (<I>irq->irq;</I>)
 and the IRQs for any one peripheral form an array
 (there are some exceptions),
