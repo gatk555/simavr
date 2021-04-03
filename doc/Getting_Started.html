@@ -187,7 +187,7 @@ That is how the control panel was implemented.
 Because an ELF firmware file can contain parameters for the simulator,
 the first step is to read the file:
 <PRE>
-	elf_firmware_t  fw;
+	elf_firmware_t  fw = {{0}};  //  Must be initialised,
         char           *firmware;
 
 	if (elf_read_firmware(firmware_file_name, &fw)) {
