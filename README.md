@@ -2,13 +2,14 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (March 2021) this fork contains some new or updated items.
+At the time of writing (April 2021) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
 + Improvements to the ADC, particularly attinyX5.
 + Some additional tests.
++ Some Pull Requests that are not yet integrated upstream are included.
 + Miscellaneous bug fixes.
 
 <H3>Getting Started with Simavr. </H3>
