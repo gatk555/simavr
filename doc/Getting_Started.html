@@ -198,7 +198,7 @@ The code can be found in run_avr.c, or in the gatk555 fork
 there is a function
 <I>avr_setup_firmware()</I>
 declared in
-<I>simavr/simavr/sim/sim_hex</I>
+<I>simavr/simavr/sim/sim_hex.h</I>
 that handles both file formats.
 When using HEX format, the
 <I>elf_firmware_t</I>
@@ -242,7 +242,6 @@ of the AVR general-purpose I/O ports (GIOPs).
 Some internal peripheral simulations route through the GIOP simulation,
 so external code does not need to consider what goes on inside,
 others are handled through their own interfaces.
-<P>
 External code interacts with simavr through function calls labelled "IRQ",
 described in <I>simavr/simavr/sim/sim_irq.h.</I>)
 Pointers to structures
@@ -393,7 +392,7 @@ For these peripherals, the external code needs to set a voltage
 (in millivolts) on an input pin.
 Simavr treats analogue input as completely separate from digital I/O,
 even though in reality they share pins.
-There is nothing in Simavr that connects the two, so it will allow you
+There is nothing in Simavr that connects the two, so it would allow you
 to do digital output on a pin that you are simultaneously using for
 analogue input.
 <P>
@@ -420,7 +419,7 @@ The analogue comparator can share the physical ADC inputs on some variants
 and has its own inputs.
 Simavr treats all of these as independent of both GIO and ADC inputs.
 Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 represent the same pin,
-those are different numbers and simavr will allow you to set
+those are different numbers and simavr would allow you to set
 different voltages.
 Providing input values for the comparator is similar to the ADC,
 except that monitoring is continuous,
@@ -443,9 +442,9 @@ as all the chip functions visible to external circuits use an I/O pin.
 That is true for the timers; their externally-visible function
 are routed through the GPIO ports.
 <P>
-The serial communication periperals (UART, SPI, TWI) are different,
+The serial communication peripherals (UART, SPI, TWI) are different,
 as transmissions do not modify pin state and reception does not examine it.
-Instead, each peripheral has its own IRQs to send and recieve bytes.
+Instead, each peripheral has its own IRQs to send and receive bytes.
 That simplifies both the simulator and external code,
 and the omission should only be visible if the pins used
 are also linked to unrelated external circuitry.

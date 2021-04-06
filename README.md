@@ -250,7 +250,6 @@ of the AVR general-purpose I/O ports (GIOPs).
 Some internal peripheral simulations route through the GIOP simulation,
 so external code does not need to consider what goes on inside,
 others are handled through their own interfaces.
-<P>
 External code interacts with simavr through function calls labelled "IRQ",
 described in <I>simavr/simavr/sim/sim_irq.h.</I>)
 Pointers to structures
@@ -451,9 +450,9 @@ as all the chip functions visible to external circuits use an I/O pin.
 That is true for the timers; their externally-visible function
 are routed through the GPIO ports.
 <P>
-The serial communication periperals (UART, SPI, TWI) are different,
+The serial communication peripherals (UART, SPI, TWI) are different,
 as transmissions do not modify pin state and reception does not examine it.
-Instead, each peripheral has its own IRQs to send and recieve bytes.
+Instead, each peripheral has its own IRQs to send and receive bytes.
 That simplifies both the simulator and external code,
 and the omission should only be visible if the pins used
 are also linked to unrelated external circuitry.
