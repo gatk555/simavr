@@ -292,6 +292,10 @@ elf_copy_section(
 }
 
 
+/* The structure *firmware must be pre-initialised to zero, then optionally
+ * with tracing and VCD information.
+ */
+
 int
 elf_read_firmware(
 	const char * file,
@@ -315,7 +319,6 @@ elf_read_firmware(
 	Elf_Data *data_fuse = NULL;
 	Elf_Data *data_lockbits = NULL;
 
-	memset(firmware, 0, sizeof(*firmware));
 #if ELF_SYMBOLS
 	firmware->symbolcount = 0;
 	firmware->symbol = NULL;

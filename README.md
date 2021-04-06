@@ -2,13 +2,14 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (March 2021) this fork contains some new or updated items.
+At the time of writing (April 2021) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
 + Improvements to the ADC, particularly attinyX5.
 + Some additional tests.
++ Some Pull Requests that are not yet integrated upstream are included.
 + Miscellaneous bug fixes.
 
 <H3>Getting Started with Simavr. </H3>
@@ -55,7 +56,7 @@ with <I>gcc-avr</I> is to create a new sub-directory of
 containing your firmware source and a simple Makefile
 <A href=./examples/panel/Makefile>like this one.</A>
 The simavr convention is that C source files with names beginning
-"attiny" or "atmega" are firmware and the first component of the name
+"attiny" or "atmega" are firmware: the first component of the name
 identifies the target AVR part
 and is used to select the appropriate compiler options.
 If your new directory has a name beginning "board_",
@@ -155,7 +156,7 @@ otherwise they are visible but not sent.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file
-that can be played back later with <I>"--panel"</I>.
+that can be played back later with <I>"--input"</I>.
 This may be useful for creating test data files and demonstrations.
 Playback can be combined with additional interactive input.
 <P>
@@ -167,10 +168,10 @@ Its source can be found in the
 <I>gatk555/blink</I>
 </A>
  repository.
-To build the version with the panel make a symbolic link to the blink
-source directory:
+To build the version with the panel,
+make a symbolic link to the blink source directory:
 <I>simavr/simavr/sim/blink</I>
-or put the blink source there.
+or use a real directory and put the blink source or outputs there.
 
 <H4>Using <I>libsimavr</I>.</H4>
 If you are developing new code to work with <I>libsimavr</I>,
@@ -195,7 +196,7 @@ That is how the control panel was implemented.
 Because an ELF firmware file can contain parameters for the simulator,
 the first step is to read the file:
 <PRE>
-	elf_firmware_t  fw;
+	elf_firmware_t  fw = {{0}};  //  Must be initialised,
         char           *firmware;
 
 	if (elf_read_firmware(firmware_file_name, &fw)) {
@@ -250,7 +251,6 @@ of the AVR general-purpose I/O ports (GIOPs).
 Some internal peripheral simulations route through the GIOP simulation,
 so external code does not need to consider what goes on inside,
 others are handled through their own interfaces.
-<P>
 External code interacts with simavr through function calls labelled "IRQ",
 described in <I>simavr/simavr/sim/sim_irq.h.</I>)
 Pointers to structures
@@ -351,7 +351,7 @@ if (base_irq != NULL) {
 The handler combines input and output values to produce a single byte value
 for display.
 This takes advantage of two additional features of IRQs:
-each peripeheral IRQ includes its own selector value
+each peripheral IRQ includes its own selector value
 (<I>irq->irq;</I>)
 and the IRQs for any one peripheral form an array
 (there are some exceptions),
@@ -451,9 +451,9 @@ as all the chip functions visible to external circuits use an I/O pin.
 That is true for the timers; their externally-visible function
 are routed through the GPIO ports.
 <P>
-The serial communication periperals (UART, SPI, TWI) are different,
+The serial communication peripherals (UART, SPI, TWI) are different,
 as transmissions do not modify pin state and reception does not examine it.
-Instead, each peripheral has its own IRQs to send and recieve bytes.
+Instead, each peripheral has its own IRQs to send and receive bytes.
 That simplifies both the simulator and external code,
 and the omission should only be visible if the pins used
 are also linked to unrelated external circuitry.
