@@ -205,8 +205,9 @@ gdb_send_quick_status(
 
 	sprintf(cmd, "T%02x20:%02x;21:%02x%02x;22:%02x%02x%02x00;",
 		signal ? signal : 5, sreg,
-		g->avr->data[R_SPL], g->avr->data[R_SPH],
-		g->avr->pc & 0xff, (g->avr->pc>>8)&0xff, (g->avr->pc>>16)&0xff);
+		g->avr->iobase[R_SPL], g->avr->iobase[R_SPH],
+		g->avr->pc & 0xff, (g->avr->pc >> 8) & 0xff,
+		(g->avr->pc >> 16) & 0xff);
 	gdb_send_reply(g, cmd);
 }
 
@@ -237,15 +238,15 @@ gdb_write_register(
 {
 	switch (regi) {
 		case 0 ... 31:
-			g->avr->data[regi] = *src;
+			g->avr->base[regi] = *src;
 			return 1;
 		case 32:
-			g->avr->data[R_SREG] = *src;
+			g->avr->iobase[R_SREG] = *src;
 			SET_SREG_FROM(g->avr, *src);
 			return 1;
 		case 33:
-			g->avr->data[R_SPL] = src[0];
-			g->avr->data[R_SPH] = src[1];
+			g->avr->iobase[R_SPL] = src[0];
+			g->avr->iobase[R_SPH] = src[1];
 			return 2;
 		case 34:
 			g->avr->pc = src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
@@ -262,7 +263,7 @@ gdb_read_register(
 {
 	switch (regi) {
 		case 0 ... 31:
-			sprintf(rep, "%02x", g->avr->data[regi]);
+			sprintf(rep, "%02x", g->avr->base[regi]);
 			break;
 		case 32: {
 				uint8_t sreg;
@@ -271,11 +272,13 @@ gdb_read_register(
 			}
 			break;
 		case 33:
-			sprintf(rep, "%02x%02x", g->avr->data[R_SPL], g->avr->data[R_SPH]);
+			sprintf(rep, "%02x%02x",
+				g->avr->iobase[R_SPL], g->avr->iobase[R_SPH]);
 			break;
 		case 34:
 			sprintf(rep, "%02x%02x%02x00",
-				g->avr->pc & 0xff, (g->avr->pc>>8)&0xff, (g->avr->pc>>16)&0xff);
+				g->avr->pc & 0xff, (g->avr->pc>>8) & 0xff,
+				(g->avr->pc >> 16) & 0xff);
 			break;
 	}
 	return strlen(rep);
@@ -638,13 +641,14 @@ avr_gdb_handle_watchpoints(
 		READ_SREG_INTO(g->avr, sreg);
 		sprintf(cmd, "T%02x20:%02x;21:%02x%02x;22:%02x%02x%02x00;%s:%06x;",
 				5, sreg,
-				g->avr->data[R_SPL], g->avr->data[R_SPH],
-				g->avr->pc & 0xff, (g->avr->pc>>8)&0xff, (g->avr->pc>>16)&0xff,
+				g->avr->iobase[R_SPL], g->avr->iobase[R_SPH],
+				g->avr->pc & 0xff, (g->avr->pc >> 8) & 0xff,
+				(g->avr->pc >> 16) & 0xff,
 				kind & AVR_GDB_WATCH_ACCESS ? "awatch" :
-					kind & AVR_GDB_WATCH_WRITE ? "watch" : "rwatch",
+					kind & AVR_GDB_WATCH_WRITE ?
+						"watch" : "rwatch",
 				addr | 0x800000);
 		gdb_send_reply(g, cmd);
-
 		avr->state = cpu_Stopped;
 	}
 }

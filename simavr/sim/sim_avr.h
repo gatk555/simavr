@@ -60,17 +60,19 @@ enum {
 
 	// 16 bits register pairs
 	R_XL	= 0x1a, R_XH,R_YL,R_YH,R_ZL,R_ZH,
-	// stack pointer
-	R_SPL	= 32+0x3d, R_SPH,
-	// real SREG
-	R_SREG	= 32+0x3f,
+	// Stack pointer in I/O space.
+	R_SPL	= 0x3d, R_SPH,
+	// Real SREG in IO space.
+	R_SREG	= 0x3f,
 
 	// maximum number of IO registers, on normal AVRs
 	MAX_IOs	= 280,	// Bigger AVRs need more than 256-32 (mega1280)
 };
 
-#define AVR_DATA_TO_IO(v) ((v) - 32)
-#define AVR_IO_TO_DATA(v) ((v) + 32)
+/* Assume there is an avr pointer about. */
+
+#define AVR_DATA_TO_IO(v) ((v) - avr->io_offset)
+#define AVR_IO_TO_DATA(v) ((v) + avr->io_offset)
 
 /**
  * Logging macros and associated log levels.
@@ -307,8 +309,14 @@ typedef struct avr_t {
 
 	// flash memory (initialized to 0xff, and code loaded into it)
 	uint8_t *		flash;
-	// this is the general purpose registers, IO registers, and SRAM
-	uint8_t *		data;
+
+	// These are the general purpose registers, IO registers, and SRAM
+	// assigned in a single buffer and initialised according to CPU type.
+
+	uint8_t *		base;		// CPU registors
+	uint8_t *		iobase;		// IO registers
+	uint8_t *		data;		// Addressable memeory
+	uint16_t		io_offset;	// Difference: iobase - data
 
 	// queue of io modules
 	struct avr_io_t * io_port;

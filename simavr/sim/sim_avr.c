@@ -97,12 +97,31 @@ int
 avr_init(
 		avr_t * avr)
 {
+	unsigned required;
+
 	avr->flash = malloc(avr->flashend + 4);
 	memset(avr->flash, 0xff, avr->flashend + 1);
 	*((uint16_t*)&avr->flash[avr->flashend + 1]) = AVR_OVERFLOW_OPCODE;
 	avr->codeend = avr->flashend;
-	avr->data = malloc(avr->ramend + 1);
-	memset(avr->data, 0, avr->ramend + 1);
+
+        /* Temporary: if simulating a series0/1/2 tiny or mega,
+	 * avr->io_offset will be non-zero.
+	 * That means CPU registers are not memory-mapped.
+         * Reset it and set up memory ponters.
+         */
+
+	required = avr->ramend + 1;
+	if (avr->io_offset)
+		required += 32;
+	avr->base = calloc(1, required);
+	if (avr->io_offset) {
+		avr->io_offset = 0;
+		avr->data = avr->iobase = avr->base + 32;
+	} else {
+		avr->io_offset = 32;
+		avr->data = avr->base;
+		avr->iobase = avr->base + 32;
+	}
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace_data = calloc(1, sizeof(struct avr_trace_data_t));
 #endif
@@ -146,7 +165,7 @@ avr_terminate(
 	avr_deallocate_ios(avr);
 
 	if (avr->flash) free(avr->flash);
-	if (avr->data) free(avr->data);
+	if (avr->base) free(avr->base);
 	if (avr->io_console_buffer.buf) {
 		avr->io_console_buffer.len = 0;
 		avr->io_console_buffer.size = 0;
@@ -186,6 +205,7 @@ avr_sadly_crashed(
 		avr_t *avr,
 		uint8_t signal)
 {
+    abort();
 	AVR_LOG(avr, LOG_ERROR, "%s\n", __FUNCTION__);
 	avr->state = cpu_Stopped;
 	if (avr->gdb_port) {
