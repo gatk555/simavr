@@ -30,6 +30,17 @@ ISR(INT0_vect)
     printf("I<%02X ", PIND);
 }
 
+static uint8_t level_limit;
+
+ISR(INT1_vect)
+{
+    static uint8_t count;
+
+    printf("L%d ", (EICRA >> 2) & 3);
+    if (++count >= level_limit)
+        EIMSK = 0;      // Stop.
+}
+
 ISR(PCINT2_vect)
 {
     printf("J<%02X ", PORTD);
@@ -89,9 +100,39 @@ int main()
 
         printf("P<%02X ", PIND);
 
-        /* TODO: Test the level-triggered interupt.  It can be started
+        /* Test the level-triggered interupt.  It can be started
          * by a pin-value change or by writing to either of EICRA and EIMSK.
+         * PORTD/3 is already 0 as are the control bits in EICRA.
+         * So this should cause one interrupt.
          */
+
+        level_limit = 4;
+        EIMSK = 2;
+        cli();
+        EICRA = 1 << 2; // Either edge.
+        sei();
+        PORTD = 8;      // Interrupt.
+        EICRA = 0;
+        level_limit = 5;
+        PORTD = 0;      // Multiple interrupts.
+        PORTB = 0;      // Waste cycles.
+        PORTC = 0;
+        PORTB = 1;
+        PORTC = 1;
+        EICRA = 2 << 2; // Falling edge
+        cli();
+        EIMSK = 2;      // Re-enable.
+        PORTD = 8;
+        printf("F<%02X ", EIFR); // Interrupt flag should be clear.
+        PORTD = 0;
+        printf("F<%02X ", EIFR); // Interrupt flag should be set.
+        level_limit = 9;
+        sei();          // Interrupt.
+        EICRA = 0;      // Multiple interrupts.
+        PORTB = 0;      // Waste cycles.
+        PORTC = 0;
+        PORTB = 1;
+        PORTC = 1;
 
         /* Try pin change interrupt. */
 
@@ -99,14 +140,15 @@ int main()
         PCMSK2 = 0x0a;        /* Pins 1 and 3. */
         DDRD = 3;
         PORTD = 1;            /* No interrupt. */
+        printf("P>%02X ", PORTD);
         PORTD = 3;            /* Interrupt. */
 
         /* Allow time for second interrupt. */
 
         printf("P<%02X ", PIND);
 
-	// this quits the simulator, since interupts are off
-	// this is a "feature" that allows running tests cases and exit
+	// This quits the simulator, since interrupts are off.
+	// This is a "feature" that allows running tests cases and exit.
         cli();
 	sleep_cpu();
 }

@@ -45,7 +45,6 @@ static void monitor(struct avr_irq_t *irq, uint32_t value, void *param)
         avr_raise_irq(base_irq + IOPORT_IRQ_PIN4, 0); // Ignored.
         avr_raise_irq(base_irq + IOPORT_IRQ_PIN7, 0);
     }
-
 }
 
 /* Writes to output ports and DDR are reported here. */
@@ -67,7 +66,7 @@ static void reg_write(struct avr_irq_t *irq, uint32_t value, void *param)
         if (value == 0xe0) {
             /* Program request to raise bit 2: external interrupt. */
 
-            avr_raise_irq(base_irq + IOPORT_IRQ_PIN2, 1);
+            avr_raise_irq(base_irq + IOPORT_IRQ_PIN2, AVR_IOPORT_OUTPUT + 1);
         } else if (value == 0) {
             if (zero_count++ == 0) {
                 /* Raise bit 3: pin change interrupt. */
@@ -91,15 +90,20 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 
 /* This string should be sent by the firmware. */
 
-static const char *expected = "P<2A P<70 F<01 I<E0 P<E0 J<03 J<00 P<E8 ";
+static const char *expected = "P<2A P<70 F<01 I<E4 P<E4 "
+                              "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
+                              "P>01 J<03 J<00 P<E0 ";
 
 /* This string is expected in variable log. */
 
 static const char *log_expected =
     "d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 P-F0 "
     "I-70 "                                     // Interrupts off testing.
-    "o-E0 P-E0 I-E0 I-E0 "                      // External interrupt test.
-    "d-03 o-01 P-E1 o-03 P-E3 o-00 P-E8 I-E8 "; // Pin change interrupt test.
+    "o-E0 P-E4 I-E4 I-E4 "                      // External 0 interrupt test.
+    "o-08 5-00 P-C8 o-00 P-C0 o-08 P-C8 o-00 "  // External 1 interrupt test.
+    "P-C0 "
+    "d-03 o-01 P-C1 o-03 P-C3 o-00 P-C0 I-C0 "  // Pin change interrupt test.
+    "5-01 P-E0 "; // Artifact: new value created in PIND read and IRQed.
 
 
 int main(int argc, char **argv) {
