@@ -158,7 +158,7 @@ avr_raise_interrupt(
 	// this allow "polling" for the "raised" flag, like for non-interrupt
 	// driven UART and so so. These flags are often "write one to clear"
 
-	if (vector->raised.reg)
+	if (vector->raised.reg && !vector->level)
 		avr_regbit_set(avr, vector->raised);
 
 	if (vector->pending) {
@@ -199,6 +199,16 @@ avr_raise_interrupt(
 		}
 	}
 	return 1;
+}
+
+int
+avr_raise_level(
+		avr_t * avr,
+		avr_int_vector_t * vector)
+{
+	INDIRECT(vector);
+	vector->level = 1;
+	return avr_raise_interrupt(avr, vector);
 }
 
 void
@@ -249,6 +259,16 @@ avr_clear_interrupt(
 		if (avr->interrupt_state > 0)
 			avr->interrupt_state = 0;
 	}
+}
+
+void
+avr_clear_level(
+		avr_t * avr,
+		avr_int_vector_t * vector)
+{
+	INDIRECT(vector);
+	vector->level = 0;
+	avr_clear_interrupt(avr, vector);
 }
 
 int
@@ -327,7 +347,8 @@ avr_service_interrupts(
 	// could also have been disabled, or cleared.
 
 	if ((vp->enable.reg && !avr_regbit_get(avr, vp->enable)) ||
-	    (vp->raised.reg && !avr_regbit_get(avr, vp->raised)) ||
+	    (!vp->level &&
+	     (vp->raised.reg && !avr_regbit_get(avr, vp->raised))) ||
 	    !vp->pending) {
 		fprintf(stderr, "Internal error: interrupt flags: %d/%d/%d\n",
 			avr_regbit_get(avr, vp->enable),

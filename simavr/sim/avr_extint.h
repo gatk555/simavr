@@ -46,19 +46,20 @@ enum {
 /*
  * This module is just a "relay" for the pin change IRQ in the IO port
  * module. We hook up to their IRQ and raise out interrupt vectors as needed
- *
- * "isc" is handled, apart from the "level" mode that doesn't make sense here (?)
+ * Interrupts are controlled by the "isc" field.
  */
 typedef struct avr_extint_t {
 	avr_io_t	io;
 
-	struct {
-		avr_regbit_t	isc[2];		// interrupt sense control bits
+	struct avr_eint_i_t {
+		struct avr_extint_t   * owner;  // Back pointer
+		avr_regbit_t            isc[2]; // interrupt sense control bits
 		avr_int_vector_t vector;	// interrupt vector
-
-		uint32_t		port_ioctl;		// ioctl to use to get port
-		uint8_t			port_pin;		// pin number in said port
-		uint8_t			strict_lvl_trig;// enforces a repetitive interrupt triggering while the pin is held low
+		uint32_t		port_ioctl; // ioctl to use to get port
+		avr_irq_t             * port_irq;   // That port/bit's IRQ
+		uint8_t			port_pin;   // pin number in said port
+		uint8_t                 previous_enable;
+		uint8_t                 previous_mode;
 	}	eint[EXTINT_COUNT];
 
 } avr_extint_t;
@@ -72,6 +73,7 @@ void avr_extint_set_strict_lvl_trig(avr_t * avr, uint8_t extint_no, uint8_t stri
 // this is a shortcut since INT declarations are pretty standard.
 // The Tinies as well as the atmega1280 are slightly different.
 // See sim_tinyx5.h and sim_mega1280.h
+
 #define AVR_EXTINT_DECLARE(_index, _portname, _portpin) \
 		.eint[_index] = { \
 			.port_ioctl = AVR_IOCTL_IOPORT_GETIRQ(_portname), \
@@ -86,6 +88,7 @@ void avr_extint_set_strict_lvl_trig(avr_t * avr, uint8_t extint_no, uint8_t stri
 
 // Asynchronous External Interrupt, for example INT2 on the m16 and m32
 // Uses only 1 interrupt sense control bit
+
 #define AVR_ASYNC_EXTINT_DECLARE(_index, _portname, _portpin) \
 		.eint[_index] = { \
 			.port_ioctl = AVR_IOCTL_IOPORT_GETIRQ(_portname), \

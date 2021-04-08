@@ -35,7 +35,7 @@ extern "C" {
 typedef struct avr_int_vector_t {
 	uint8_t 	vector;	// vector number, zero (reset) is reserved
 	uint8_t		pending : 1, 	    // Wants to run.
-			level : 1,          // Level-triggered.
+			level : 1,          // Level-triggered is active.
 			indirect : 1,       // Handle duplicates
 			trace : 1,	    // For debug.
 			raise_sticky : 1,   // Do not auto-clear .raised.
@@ -73,6 +73,15 @@ avr_raise_interrupt(
 		struct avr_t * avr,
 		avr_int_vector_t * vector);
 
+// Raise a level-triggered interrupt (if enabled).
+// Return non-zero if the interrupt was raised and
+// is now pending.
+
+int
+avr_raise_level(
+		struct avr_t * avr,
+		avr_int_vector_t * vector);
+
 // Return non-zero if the AVR core has any pending interrupts.
 
 int
@@ -90,6 +99,13 @@ avr_is_interrupt_pending(
 
 void
 avr_clear_interrupt(
+		struct avr_t * avr,
+		avr_int_vector_t * vector);
+
+// Clear level-triggered interrupt.
+
+void
+avr_clear_level(
 		struct avr_t * avr,
 		avr_int_vector_t * vector);
 
