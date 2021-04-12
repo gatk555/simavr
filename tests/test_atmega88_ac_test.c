@@ -2,6 +2,8 @@
 #include "avr_acomp.h"
 
 int main(int argc, char **argv) {
+	const avr_pin_info_t *pip;
+
 	tests_init(argc, argv);
 
 	static const char *expected =
@@ -13,6 +15,15 @@ int main(int argc, char **argv) {
 		"YY";
 
 	avr_t *avr = tests_init_avr("atmega88_ac_test.axf");
+
+	// Test the pin information ioctl.
+
+	pip = (const avr_pin_info_t *)0;
+	if (avr_ioctl(avr, AVR_IOCTL_ACOMP_GETPINS, &pip) < 0 || !pip ||
+	    pip[-1].port_letter || pip[2].port_letter ||
+	    pip[1].port_letter != 'D' || pip[1].pin != 7) {
+		fail("AVR_IOCTL_ACOMP_GETPINS failed.\n");
+	}
 
 	// set voltages
 	avr_raise_irq(avr_io_getirq(avr, AVR_IOCTL_ACOMP_GETIRQ, ACOMP_IRQ_AIN0), 2000);

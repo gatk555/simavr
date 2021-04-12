@@ -54,8 +54,13 @@ enum {
 	ADC_IRQ_COUNT
 };
 
-// Get the internal IRQ corresponding to the INT
+// Get the ADC's IRQS.
+
 #define AVR_IOCTL_ADC_GETIRQ AVR_IOCTL_DEF('a','d','c','0')
+
+// Get the pin assignments.
+
+#define AVR_IOCTL_ADC_GETPINS AVR_IOCTL_DEF('a','d','P','0')
 
 /*
  * Definition of a ADC mux mode.
@@ -133,6 +138,7 @@ typedef struct avr_adc_t {
 	avr_int_vector_t adc;
 
 	avr_adc_mux_t	muxmode[64];    // maximum 6 bits of mux modes
+	const avr_pin_info_t *pin_info; // Optional I/O pin assignments.
 
         /*
 	 * runtime bits

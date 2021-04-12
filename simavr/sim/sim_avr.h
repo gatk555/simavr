@@ -351,6 +351,18 @@ typedef struct avr_t {
 } avr_t;
 
 
+// Structure to hold assignements of analogue inputs to pins.
+// This information is not currently used inside simavr, but can
+// be transcribed from data sheets and made available to applications.
+// The data is stored in an array of structure and made available
+// via ioctls.  The returned pointer is offset so that there is an
+// entry at negative offset for the external voltage reference pin.
+
+typedef struct avr_pin_info {
+	char	port_letter; // A-Z or null for termination.
+	uint8_t pin;
+} avr_pin_info_t;
+
 // this is a static constructor for each of the AVR devices
 typedef struct avr_kind_t {
 	const char * names[4];	// name aliases

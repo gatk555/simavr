@@ -46,8 +46,13 @@ enum {
 	ACOMP_IRQ_COUNT
 };
 
-// Get the internal IRQ corresponding to the INT
+// Get the AC's IRQS.
+
 #define AVR_IOCTL_ACOMP_GETIRQ AVR_IOCTL_DEF('a','c','m','p')
+
+// Get the pin assignments.
+
+#define AVR_IOCTL_ACOMP_GETPINS AVR_IOCTL_DEF('a','c','m','P')
 
 enum {
 	ACOMP_BANDGAP = 1100
@@ -78,6 +83,7 @@ typedef struct avr_acomp_t {
 	uint16_t		adc_values[16];	// current values on the ADCs inputs
 	uint16_t		ain_values[2];  // current values on AIN inputs
 	avr_irq_t*		timer_irq;
+	const avr_pin_info_t   *pin_info;       // Optional I/O pin assignments
 } avr_acomp_t;
 
 void avr_acomp_init(avr_t * avr, avr_acomp_t * port);

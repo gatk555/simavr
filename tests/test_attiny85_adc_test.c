@@ -72,7 +72,7 @@ static void conversion(struct avr_irq_t *irq, uint32_t value, void *param)
 }
 
 int main(int argc, char **argv) {
-	static const char *expected = "ADC 512 920 1023 0"
+	static const char    *expected = "ADC 512 920 1023 0"
                                            " 0 22912 39 585"
                                            " 260 1 1003 759"
                                            " 511 156 512 757\r\n"
@@ -81,10 +81,22 @@ int main(int argc, char **argv) {
                                            " 0 22912 39 585"
                                            " 260 1 1003 759"
                                            " 511 156 512 757";
-	avr_t             *avr;
+	avr_t                *avr;
+	const avr_pin_info_t *pip;
 
 	tests_init(argc, argv);
         avr = tests_init_avr("attiny85_adc_test.axf");
+
+	/* Test the pin information ioctl. */
+
+	pip = (const avr_pin_info_t *)0;
+	if (avr_ioctl(avr, AVR_IOCTL_ADC_GETPINS, &pip) < 0 || !pip ||
+	    pip[-1].port_letter != 'B' || pip[-1].pin != 0 ||
+	    pip[4].port_letter ||
+	    pip[2].port_letter != 'B' || pip[2].pin != 4) {
+		fail("AVR_IOCTL_ADC_GETPINS failed.\n");
+	}
+
 
         /* Request callback when a value is sampled for conversion. */
 
