@@ -161,6 +161,8 @@ avr_io_getirq(
 			return port->irq + index;
 		port = port->next;
 	}
+	if (ctl == AVR_IOCTL_CPU_GETIRQ) // CPU IRQs
+		return avr->irq + index;
 	return NULL;
 }
 
