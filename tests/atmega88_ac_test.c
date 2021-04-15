@@ -97,6 +97,10 @@ int main(void)
 
 	putchar('\n');
 
+        // Turn it off.
+
+        ACSR = _BV(ACD);
+
 	// check interrupts
 	printf("Check analog comparator interrupts\n");
 	// in this test bandgap is expected to be above ADC0 and below ADC1
@@ -174,6 +178,5 @@ int main(void)
 
 	cli();
 	sleep_cpu();
-
 }
 
