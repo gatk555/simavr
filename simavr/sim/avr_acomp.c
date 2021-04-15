@@ -28,73 +28,82 @@ avr_acomp_get_state(
 		struct avr_t * avr,
 		avr_acomp_t *ac)
 {
-	if (avr_regbit_get(avr, ac->disabled))
-		return 0;
+	uint16_t positive_v, negative_v;
 
-	// get positive voltage
-	uint16_t positive_v;
-
-	if (avr_regbit_get(avr, ac->acbg)) {		// if bandgap
-		positive_v = ACOMP_BANDGAP;
-	} else {
-		positive_v = ac->ain_values[0];	// AIN0
-	}
-
-	// get negative voltage
-	uint16_t negative_v = 0;
-
-	// multiplexer is enabled if acme is set and adc is off
-	if (avr_regbit_get(avr, ac->acme) && !avr_regbit_get(avr, ac->aden)) {
-		if (!avr_regbit_get(avr, ac->pradc)) {
-			uint8_t adc_i = avr_regbit_get_array(avr, ac->mux, ARRAY_SIZE(ac->mux));
-			if (adc_i < ac->mux_inputs && adc_i < ARRAY_SIZE(ac->adc_values)) {
-				negative_v = ac->adc_values[adc_i];
-			}
-		}
-
-	} else {
-		negative_v = ac->ain_values[1];	// AIN1
-	}
-
+	positive_v = ac->inputs.positive ? ACOMP_BANDGAP : ac->ain_values[0];
+	negative_v = ac->inputs.negative ?
+		ac->adc_values[ac->inputs.negative - 1] : ac->ain_values[1];
 	return positive_v > negative_v;
 }
 
 static avr_cycle_count_t
-avr_acomp_sync_state(
+avr_acomp_test_state(
 	struct avr_t * avr,
 	avr_cycle_count_t when,
 	void * param)
 {
 	avr_acomp_t * p = (avr_acomp_t *)param;
-	if (!avr_regbit_get(avr, p->disabled)) {
+	uint8_t cur_state = avr_regbit_get(avr, p->aco);
+	uint8_t new_state = avr_acomp_get_state(avr, p);
 
-		uint8_t cur_state = avr_regbit_get(avr, p->aco);
-		uint8_t new_state = avr_acomp_get_state(avr, p);
+	if (new_state != cur_state) {
+		avr_regbit_setto(avr, p->aco, new_state); // set ACO
 
-		if (new_state != cur_state) {
-			avr_regbit_setto(avr, p->aco, new_state);		// set ACO
+		uint8_t acis0 = avr_regbit_get(avr, p->acis[0]);
+		uint8_t acis1 = avr_regbit_get(avr, p->acis[1]);
 
-			uint8_t acis0 = avr_regbit_get(avr, p->acis[0]);
-			uint8_t acis1 = avr_regbit_get(avr, p->acis[1]);
-
-			if ((acis0 == 0 && acis1 == 0) || (acis1 == 1 && acis0 == new_state)) {
-				avr_raise_interrupt(avr, &p->ac);
-			}
-
-			avr_raise_irq(p->io.irq + ACOMP_IRQ_OUT, new_state);
+		if ((acis0 == 0 && acis1 == 0) ||
+		    (acis1 == 1 && acis0 == new_state)) {
+			avr_raise_interrupt(avr, &p->ac);
 		}
-
+		avr_raise_irq(p->io.irq + ACOMP_IRQ_OUT, new_state);
 	}
-
 	return 0;
 }
 
-static inline void
+/* Determine current input state, IRQ if changed and schedule output. */
+
+static void
 avr_schedule_sync_state(
 	struct avr_t * avr,
 	void *param)
 {
-	avr_cycle_timer_register(avr, 1, avr_acomp_sync_state, param);
+	avr_acomp_t * p = (avr_acomp_t *)param;
+	union {
+		avr_acomp_inputs_t inputs;
+		uint32_t           val;
+	}             u;
+
+	// Determine the new input state.
+
+	u.val = 0;
+	if (!avr_regbit_get(avr, p->disabled)) {
+		u.inputs.active = 1;
+		u.inputs.positive = avr_regbit_get(avr, p->acbg); // Bandgap.
+
+		// Multiplexer is enabled if acme is set and adc is off.
+
+		u.inputs.negative = 0; // Assume AIN1 to start.
+		if (avr_regbit_get(avr, p->acme) &&
+                    !avr_regbit_get(avr, p->aden) &&
+		    !avr_regbit_get(avr, p->pradc)) {
+			uint8_t adc_i;
+
+			adc_i = avr_regbit_get_array(avr, p->mux,
+						     ARRAY_SIZE(p->mux));
+			if (adc_i < p->mux_inputs &&
+			    adc_i < ARRAY_SIZE(p->adc_values)) {
+				// Negative input from multiplexor.
+
+				u.inputs.negative = adc_i + 1;
+			}
+		}
+	}
+	p->inputs = u.inputs;
+
+	avr_raise_irq(p->io.irq + ACOMP_IRQ_INPUT_STATE, u.val); // Inform user
+	if (u.inputs.active)
+		avr_cycle_timer_register(avr, 1, avr_acomp_test_state, param);
 }
 
 static void
@@ -191,6 +200,7 @@ avr_acomp_reset(avr_io_t * port)
 {
 	avr_acomp_t * p = (avr_acomp_t *)port;
 
+	p->inputs.active = 1; // Enabled by default.
 	for (int i = 0; i < ACOMP_IRQ_COUNT; i++)
 		avr_irq_register_notify(p->io.irq + i, avr_acomp_irq_notify, p);
 
@@ -234,7 +244,8 @@ static const char * irq_names[ACOMP_IRQ_COUNT] = {
 	[ACOMP_IRQ_ADC13] = "16<adc13",
 	[ACOMP_IRQ_ADC14] = "16<adc14",
 	[ACOMP_IRQ_ADC15] = "16<adc15",
-	[ACOMP_IRQ_OUT] = ">out"
+	[ACOMP_IRQ_OUT] = ">out",
+	[ACOMP_IRQ_INPUT_STATE] = "32>input_state"
 };
 
 static avr_io_t _io = {
@@ -253,8 +264,11 @@ avr_acomp_init(
 
 	avr_register_io(avr, &p->io);
 	avr_register_vector(avr, &p->ac);
+
 	// allocate this module's IRQ
+
 	avr_io_setirqs(&p->io, AVR_IOCTL_ACOMP_GETIRQ, ACOMP_IRQ_COUNT, NULL);
+	p->io.irq[ACOMP_IRQ_INPUT_STATE].flags |= IRQ_FLAG_FILTERED;
 
 	avr_register_io_write(avr, p->r_acsr, avr_acomp_write_acsr, p);
 }

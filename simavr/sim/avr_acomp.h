@@ -43,6 +43,7 @@ enum {
 	ACOMP_IRQ_ADC8, ACOMP_IRQ_ADC9, ACOMP_IRQ_ADC10, ACOMP_IRQ_ADC11,
 	ACOMP_IRQ_ADC12, ACOMP_IRQ_ADC13, ACOMP_IRQ_ADC14, ACOMP_IRQ_ADC15,
 	ACOMP_IRQ_OUT,		// output has changed
+        ACOMP_IRQ_INPUT_STATE,
 	ACOMP_IRQ_COUNT
 };
 
@@ -57,6 +58,13 @@ enum {
 enum {
 	ACOMP_BANDGAP = 1100
 };
+
+// Structure showing active input state.  Value for ACOMP_IRQ_INPUT_STATE.
+typedef struct avr_acomp_inputs {
+	uint8_t active;
+	uint8_t positive;	// 0 means AIN0, 1 means BANDGAP.
+	uint8_t negative;       // 0 means AIN1, >0 means ADC input.
+} avr_acomp_inputs_t;
 
 typedef struct avr_acomp_t {
 	avr_io_t		io;
@@ -74,6 +82,7 @@ typedef struct avr_acomp_t {
 	avr_regbit_t	acbg;		// bandgap select
 	avr_regbit_t	disabled;
 
+	avr_acomp_inputs_t      inputs; // Input state
 	char			timer_name;	// connected timer for incput capture triggering
 
 	// use ACI and ACIE bits
