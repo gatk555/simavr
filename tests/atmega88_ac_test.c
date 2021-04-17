@@ -151,6 +151,23 @@ int main(void)
 	_delay_us(500);
 	output_test(1);
 
+        // Test clearing pending interrupt.
+
+	int_done = 0;
+        cli();
+	ADMUX = _BV(MUX0); // Falling edge
+	_delay_us(500);
+
+	// switch to ADC0 (rising edge)
+	int_done = 0;
+	ADMUX = 0;
+	_delay_us(500);
+        if (ACSR & (1 << ACI))
+            printf("F");
+        ACSR |= (1 << ACI);     // Clear interrupt.
+        sei();
+	output_test(0);
+
 	putchar('\n');
 
 	// now check timer1 input capture
