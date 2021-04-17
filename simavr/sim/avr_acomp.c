@@ -115,6 +115,13 @@ avr_acomp_write_acsr(
 {
 	avr_acomp_t * p = (avr_acomp_t *)param;
 
+        if (avr_regbit_from_value(avr, p->ac.raised, v)) {
+            // Clear interrrupt if flag bit is set.
+
+            avr_clear_interrupt(avr, &p->ac);
+            v &= ~(1 << p->ac.raised.bit);
+        }
+
 	avr_core_watch_write(avr, addr, v);
 
 	if (avr_regbit_get(avr, p->acic) != (p->timer_irq ? 1:0)) {

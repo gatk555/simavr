@@ -23,13 +23,13 @@ int main(int argc, char **argv) {
 		"Check analog comparator with polling values\r\n"
 		"110110101010000100\r\n"
 		"Check analog comparator interrupts\r\n"
-		"YYYYYY\r\n"
+		"YYYYYYFY\r\n"
 		"Check analog comparator triggering timer capture\r\n"
 		"YY";
 	static const char *expected_inputs =
 		"100.101.102.103.104.105.106.107.108.101.111."
 		"110.111.112.113.114.115.116.117.118.111."
-		"000.111.112.111.112.111.112.111.112.111.";
+		"000.111.112.111.112.111.112.111.112.111.112.111.";
 	const avr_pin_info_t *pip;
 
 	tests_init(argc, argv);
