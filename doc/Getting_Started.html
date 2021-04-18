@@ -76,17 +76,18 @@ There are tools, for example
 <I>gtkwave</I>
 </A>
 for displaying VCD files but, as far as I know,
-no dedicated software tools for creating them.
+few dedicated software tools for creating them.
 Two programs that may help are
+<A href="https://github.com/lcgamboa/picsimlab">
+<I>PICSimLab</I>
+</A>
+and
 <A href="https://sourceforge.net/projects/simutron/">
 <I>simutron</I>
 </A>
-a graphical circuit designer/emulator that supports simavr,
-VCD and mouse input, and
-<A href="http://vcdmaker.org/">
-<I>vcdmaker</I>
-</A>
-a utility for extracting information from files and generating VCD data.
+They are both larger graphical circuit designer/emulator that include simavr
+as a component and have various input devices whose actions can be captured
+as VCD files.
 <P>
 VCD input files used for input must follow a convention for variable names
 that match the
@@ -96,8 +97,38 @@ format
 The inserted values correspond to the last two arguments to
 <I>avr_io_getirq(),</I>
 described below.
-The next section describes another option for creating VCD input files
-following that convention.
+If input files require translation,
+another program,
+<A href="http://vcdmaker.org/">
+<I>vcdmaker,</I>
+</A>
+may be useful.
+It is a utility for extracting information from various log files
+and generating VCD data.
+A following section describes another option for creating VCD input files
+that already follow simavr's rules.
+
+<H4>Debugging with run-avr.</H4>
+The simulator has support for debugging your firmware with the AVR version
+of the GNU debugger,
+<I>avr-gdb,</I>
+and it is as easy to use as ordinary debugging with the standard
+<I>gdb.</I>
+Simply run
+<I>simavr</I>
+as usual, with the extra option
+<I>--gdb</I>
+and put the process in the background.
+Then start
+<I>avr-gdb</I>
+with your firmware binary (ELF format with debugging symbols is best)
+as argument.
+The first gdb command should be:
+<PRE>
+  target remote :1234
+</PRE>
+That connects the debugger to the simulated AVR
+and following commands work normally.
 
 <H4>Options in firmware.</H4>
 A slightly unusual feature of
@@ -108,7 +139,7 @@ In some cases there is no other way to set them.
 These options include peripheral tracing details, VCD file tracing details,
 some analogue voltage inputs and others.
 Details are in the file
-<I>simavr/simavr/sim/avr/avr_mcu_section.h.</I>
+<I>simavr/simavr/sim/avr/avr_mcus_ection.h.</I>
 
 <H4 id="panel">Interactive <I>run-avr</I>.</H4>
 The version of
@@ -543,7 +574,27 @@ static int my_avr_run(avr_t *avr)
     return avr->state;
 }
 </PRE>
+Interactive debugging also uses a variant run loop.
+The normal procedure is to copy
+<I>run_avr:</I>
+<PRE>
+	if (gdb) {
+		avr->state = cpu_Stopped;
+		avr_gdb_init(avr);
+	}
 
+        ...
+
+                for (;;) {
+                        int state = avr_run(avr);
+                        if (state == cpu_Done || state == cpu_Crashed)
+                                break;
+                }
+</PRE>
+If needed, the debugging run function
+<I>avr_callback_run_gdb()</I>
+can be called directly.
+<P>
 An application might also need to implement an additional AVR peripheral,
 real or virtual.
 For that, there are functions to monitor reads and writes
