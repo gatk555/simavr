@@ -61,6 +61,18 @@ struct mcu_t {
 #error SIM_MMCU is not declared
 #endif
 
+static const avr_pin_info_t adc_pins[] = {
+	{'B', 0}, // AREF
+	{'B', 5}, {'B', 2}, {'B', 4}, {'B', 3}, // ADC0-3
+	{0, 0}
+};
+
+static const avr_pin_info_t acomp_pins[] = {
+	{'B', 0}, // AREF
+	{'B', 0}, {'B', 1}, // AIN0-1
+	{0, 0}
+};
+
 const struct mcu_t SIM_CORENAME = {
 	.core = {
 		.mmcu = SIM_MMCU,
@@ -101,7 +113,8 @@ const struct mcu_t SIM_CORENAME = {
 			.enable = AVR_IO_REGBIT(ACSR, ACIE),
 			.raised = AVR_IO_REGBIT(ACSR, ACI),
 			.vector = ANA_COMP_vect,
-		}
+		},
+		.pin_info = acomp_pins
 	},
 	.adc = {
 		.r_admux = ADMUX,
@@ -157,6 +170,7 @@ const struct mcu_t SIM_CORENAME = {
 			.raised = AVR_IO_REGBIT(ADCSRA, ADIF),
 			.vector = ADC_vect,
 		},
+		.pin_info = adc_pins
 	},
 	.timer0 = {
 		.name = '0',

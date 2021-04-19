@@ -41,6 +41,11 @@ ISR(INT1_vect)
         EIMSK = 0;      // Stop.
 }
 
+ISR(PCINT0_vect)
+{
+    printf("K ");
+}
+
 ISR(PCINT2_vect)
 {
     printf("J<%02X ", PORTD);
@@ -147,8 +152,25 @@ int main()
 
         printf("P<%02X ", PIND);
 
+        // Test "write 1 to clear" on PORT B.
+
+        DDRB = 0xff;
+        PCICR = (1 << PCIE0); /* Interrupt enable. */
+        PCMSK0 = 3;           /* Pins 0 and 1. */
+        cli();
+        PORTB = 1;
+        PCIFR = 1;            /* Clear interrupt. */
+        sei();
+        printf("| ");
+        cli();
+        PORTB = 3;
+        PCIFR = 6;
+        sei();                /* Interrupt. */
+        printf("| ");
+
 	// This quits the simulator, since interrupts are off.
 	// This is a "feature" that allows running tests cases and exit.
+
         cli();
 	sleep_cpu();
 }

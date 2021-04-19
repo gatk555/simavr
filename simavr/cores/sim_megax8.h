@@ -72,6 +72,19 @@ struct mcu_t {
 #define EFUSE_DEFAULT 0
 #endif
 
+static const avr_pin_info_t adc_pins[] = {
+	{0, 0}, // Dedicated AREF pin.
+	{'C', 0}, {'C', 1}, {'C', 2}, {'C', 3}, {'C', 4}, {'C', 5}, // ADC0-5
+        // 32-pin packages have dedicated ADC6-7 pins.
+	{0, 0}
+};
+
+static const avr_pin_info_t acomp_pins[] = {
+	{0, 0}, // Dedicated AREF
+	{'D', 6}, {'D', 7}, // AIN0-1
+	{0, 0}
+};
+
 const struct mcu_t SIM_CORENAME = {
 	.core = {
 		.mmcu = SIM_MMCU,
@@ -143,7 +156,8 @@ const struct mcu_t SIM_CORENAME = {
 			.enable = AVR_IO_REGBIT(ACSR, ACIE),
 			.raised = AVR_IO_REGBIT(ACSR, ACI),
 			.vector = ANALOG_COMP_vect,
-		}
+		},
+		.pin_info = acomp_pins
 	},
 	.adc = {
 		.r_admux = ADMUX,
@@ -189,6 +203,7 @@ const struct mcu_t SIM_CORENAME = {
 			.raised = AVR_IO_REGBIT(ADCSRA, ADIF),
 			.vector = ADC_vect,
 		},
+		.pin_info = adc_pins
 	},
 	.timer0 = {
 		.name = '0',
@@ -279,6 +294,7 @@ const struct mcu_t SIM_CORENAME = {
 				.r_ocrh = OCR1AH,	// 16 bits timers have two bytes of it
 				.com = AVR_IO_REGBITS(TCCR1A, COM1A0, 0x3),
 				.com_pin = AVR_IO_REGBIT(PORTB, 1),
+                .foc = AVR_IO_REGBIT(TCCR1C, FOC1A),
 				.interrupt = {
 					.enable = AVR_IO_REGBIT(TIMSK1, OCIE1A),
 					.raised = AVR_IO_REGBIT(TIFR1, OCF1A),
@@ -290,6 +306,7 @@ const struct mcu_t SIM_CORENAME = {
 				.r_ocrh = OCR1BH,
 				.com = AVR_IO_REGBITS(TCCR1A, COM1B0, 0x3),
 				.com_pin = AVR_IO_REGBIT(PORTB, 2),
+                .foc = AVR_IO_REGBIT(TCCR1C, FOC1B),
 				.interrupt = {
 					.enable = AVR_IO_REGBIT(TIMSK1, OCIE1B),
 					.raised = AVR_IO_REGBIT(TIFR1, OCF1B),

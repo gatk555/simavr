@@ -186,8 +186,11 @@ typedef struct avr_t {
 	int				state;		// stopped, running, sleeping
 	int				saved_state;
 	uint32_t			frequency;	// frequency we are running at
-	// mostly used by the ADC for now
-	uint32_t			vcc,avcc,aref; // (optional) voltages in millivolts
+
+	// (Optional) voltages in millivolts.
+	// Used by the ADC and comparator.
+
+	uint32_t			vcc, avcc, aref;
 
 	// cycles gets incremented when sleeping and when running; it corresponds
 	// not only to "cycles that runs" but also "cycles that might have run"
@@ -321,6 +324,10 @@ typedef struct avr_t {
 	// queue of io modules
 	struct avr_io_t * io_port;
 
+	// IRQS
+
+	struct avr_irq_t *	irq;
+
 	// Builtin and user-defined commands
 	avr_cmd_table_t commands;
 	// cycle timers tracking & delivery
@@ -358,6 +365,26 @@ typedef struct avr_t {
 	} io_console_buffer;
 } avr_t;
 
+// CPU IRQs and IOCTL to get them.
+
+enum {
+      CPU_IRQ_VCC = 0, CPU_IRQ_AVCC, CPU_IRQ_AREF,
+      CPU_IRQ_COUNT
+};
+
+#define AVR_IOCTL_CPU_GETIRQ AVR_IOCTL_DEF('C','P','U','0')
+
+// Structure to hold assignements of analogue inputs to pins.
+// This information is not currently used inside simavr, but can
+// be transcribed from data sheets and made available to applications.
+// The data is stored in an array of structure and made available
+// via ioctls.  The returned pointer is offset so that there is an
+// entry at negative offset for the external voltage reference pin.
+
+typedef struct avr_pin_info {
+	char	port_letter; // A-Z or null for termination.
+	uint8_t pin;
+} avr_pin_info_t;
 
 // this is a static constructor for each of the AVR devices
 typedef struct avr_kind_t {

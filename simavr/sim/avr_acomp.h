@@ -43,15 +43,28 @@ enum {
 	ACOMP_IRQ_ADC8, ACOMP_IRQ_ADC9, ACOMP_IRQ_ADC10, ACOMP_IRQ_ADC11,
 	ACOMP_IRQ_ADC12, ACOMP_IRQ_ADC13, ACOMP_IRQ_ADC14, ACOMP_IRQ_ADC15,
 	ACOMP_IRQ_OUT,		// output has changed
+        ACOMP_IRQ_INPUT_STATE,
 	ACOMP_IRQ_COUNT
 };
 
-// Get the internal IRQ corresponding to the INT
+// Get the AC's IRQS.
+
 #define AVR_IOCTL_ACOMP_GETIRQ AVR_IOCTL_DEF('a','c','m','p')
+
+// Get the pin assignments.
+
+#define AVR_IOCTL_ACOMP_GETPINS AVR_IOCTL_DEF('a','c','m','P')
 
 enum {
 	ACOMP_BANDGAP = 1100
 };
+
+// Structure showing active input state.  Value for ACOMP_IRQ_INPUT_STATE.
+typedef struct avr_acomp_inputs {
+	uint8_t active;
+	uint8_t positive;	// 0 means AIN0, 1 means BANDGAP.
+	uint8_t negative;       // 0 means AIN1, >0 means ADC input.
+} avr_acomp_inputs_t;
 
 typedef struct avr_acomp_t {
 	avr_io_t		io;
@@ -69,6 +82,7 @@ typedef struct avr_acomp_t {
 	avr_regbit_t	acbg;		// bandgap select
 	avr_regbit_t	disabled;
 
+	avr_acomp_inputs_t      inputs; // Input state
 	char			timer_name;	// connected timer for incput capture triggering
 
 	// use ACI and ACIE bits
@@ -78,6 +92,7 @@ typedef struct avr_acomp_t {
 	uint16_t		adc_values[16];	// current values on the ADCs inputs
 	uint16_t		ain_values[2];  // current values on AIN inputs
 	avr_irq_t*		timer_irq;
+	const avr_pin_info_t   *pin_info;       // Optional I/O pin assignments
 } avr_acomp_t;
 
 void avr_acomp_init(avr_t * avr, avr_acomp_t * port);

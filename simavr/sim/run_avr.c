@@ -42,18 +42,19 @@ display_usage(
 {
 	printf("Usage: %s [...] <firmware>\n", app);
 	printf(
+	 "       [--help|-h|-?]      Display this usage message and exit\n"
+	 "       [--list-cores]      List all supported AVR cores and exit\n"
+	 "       [--list-irqs]       List all supported IRQs for given core and exit\n"
+	 "       [-v]                Raise verbosity level\n"
+	 "                           (can be passed more than once)\n"
          "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
 	 "       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
-	 "       [--list-cores]      List all supported AVR cores and exit\n"
-	 "       [--help|-h|-?]      Display this usage message and exit\n"
+	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
+                "(default 1234)\n"
 #ifdef CONFIG_SIMAVR_TRACE
 	 "       [--trace, -t]       Run full scale decoder trace\n"
-	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
-                "to be traced\n"
 #else
 	 "       [--trace, -t]       Run full scale decoder trace (Off)\n"
-	 "       [--add-trace|-at <name=kind@addr/mask>] Add signal "
-                "to be traced (Off)\n"
 #endif //CONFIG_SIMAVR_TRACE
 	 "       [-ti <vector>]      Add traces for IRQ vector <vector>\n"
 #ifdef CONFIG_PANEL
@@ -61,17 +62,28 @@ display_usage(
 #else
          "       [--panel|-p]        Show control panel (Off)\n"
 #endif // CONFIG_PANEL
-	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
-                "(default 1234)\n"
+	 "       [--input|-i <file>] A VCD file to use as input signals\n"
+	 "       [--output|-o <file>] A VCD file to save the traced signals\n"
+	 "       [--add-trace|-at <name=kind@addr/mask>]\n"
+         "                           Add signal to be included in VCD output\n"
 	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
 	 "       [-ee <.hex file>]   Load next .hex file as eeprom\n"
-	 "       [--input|-i <file>] A vcd file to use as input signals\n"
-	 "       [--output|-o <file>] A vcd file to save the traced signals\n"
-	 "       [-v]                Raise verbosity level\n"
-	 "                           (can be passed more than once)\n"
 	 "       <firmware>          A .hex or an ELF file. ELF files are\n"
 	 "                           preferred, and can include "
                 "debugging syms\n");
+	exit(1);
+}
+
+static avr_t      * avr = NULL;
+
+static void
+list_all_irqs(char *mcu)
+{
+	int i;
+
+	printf( "Supported IRQs for %s:\n", mcu);
+	for (i = 0; i < avr->irq_pool.count; ++i)
+		printf("\t%s\n", avr->irq_pool.irq[i]->name);
 	exit(1);
 }
 
@@ -87,8 +99,6 @@ list_cores()
 	}
 	exit(1);
 }
-
-static avr_t      * avr = NULL;
 
 static void
 sig_int(
@@ -114,6 +124,7 @@ main(
 	elf_firmware_t f = {{0}};
 	uint32_t f_cpu = 0;
 	int gdb = 0;
+	int list_irqs = 0;
 	int log = 1;
 	int port = 1234;
         char name[24] = "";
@@ -121,7 +132,7 @@ main(
 	int trace_vectors[8] = {0};
 	int trace_vectors_count = 0;
 	const char *vcd_input = NULL;
-	const char *firmware;
+	const char *firmware = NULL;
 
 	if (argc == 1)
 		display_usage(basename(argv[0]));
@@ -129,6 +140,8 @@ main(
 	for (int pi = 1; pi < argc; pi++) {
 		if (!strcmp(argv[pi], "--list-cores")) {
 			list_cores();
+                } else if (!strcmp(argv[pi], "--list-irqs")) {
+			list_irqs = 1;
 		} else if (!strcmp(argv[pi], "-?") ||
                            !strcmp(argv[pi], "-h") ||
                            !strcmp(argv[pi], "--help")) {
@@ -162,10 +175,16 @@ main(
 			}
 			snprintf(f.tracename, sizeof(f.tracename),
 				 "%s", argv[++pi]);
-#ifdef CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-t") ||
                            !strcmp(argv[pi], "--trace")) {
+#ifdef CONFIG_SIMAVR_TRACE
 			trace++;
+#else
+                        fprintf(stderr,
+                                "%s: tracing option '%s' requires "
+                                "compilation option CONFIG_SIMAVR_TRACE.\n",
+                                argv[0], argv[pi]);
+#endif //CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-at") ||
                            !strcmp(argv[pi], "--add-trace")) {
 			if (pi + 1 >= argc) {
@@ -234,16 +253,6 @@ main(
 				f.trace[f.tracecount].name);
 
 			++f.tracecount;
-#else
-		} else if (!strcmp(argv[pi], "-t") ||
-                           !strcmp(argv[pi], "--trace") ||
-                           !strcmp(argv[pi], "-at") ||
-                           !strcmp(argv[pi], "--add-trace")) {
-                        fprintf(stderr,
-                                "%s: tracing option '%s' requires "
-                                "compilation option CONFIG_SIMAVR_TRACE\n",
-                                argv[0], argv[pi]);
-#endif //CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
 				trace_vectors[trace_vectors_count++] =
@@ -287,6 +296,8 @@ main(
 		exit(1);
 	}
 	avr_init(avr);
+        if (list_irqs)
+                list_all_irqs(f.mmcu);        // Does not return.
 	avr->log = (log > LOG_TRACE ? LOG_TRACE : log);
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace = trace;

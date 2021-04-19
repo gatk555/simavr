@@ -93,11 +93,39 @@ avr_get_time_stamp(
 	return stamp - avr->time_base;
 }
 
+/* The AVR CPU has IRQs for setting external voltages and similar. */
+
+static const char * irq_names[] = {
+	[CPU_IRQ_VCC] = "32<avr.VCC",
+	[CPU_IRQ_AVCC] = "32<avr.AVCC",
+	[CPU_IRQ_AREF] = "32<avr.AREF",
+};
+
+static void
+avr_adc_irq_notify(
+		struct avr_irq_t * irq, uint32_t value, void * param)
+{
+	avr_t * avr = (avr_t *)param;
+
+	switch (irq->irq) {
+	case CPU_IRQ_VCC:
+		avr->vcc = value;
+		break;
+	case CPU_IRQ_AVCC:
+		avr->avcc = value;
+		break;
+	case CPU_IRQ_AREF:
+		avr->aref = value;
+		break;
+	}
+}
+
 int
 avr_init(
 		avr_t * avr)
 {
 	unsigned required;
+	int i;
 
 	avr->flash = malloc(avr->flashend + 4);
 	memset(avr->flash, 0xff, avr->flashend + 1);
@@ -131,6 +159,11 @@ avr_init(
 	// cpu is in limbo before init is finished.
 	avr->state = cpu_Limbo;
 	avr->frequency = 1000000;	// can be overridden via avr_mcu_section
+        avr->irq = avr_alloc_irq(&avr->irq_pool, 0, CPU_IRQ_COUNT, irq_names);
+	for (i = 0; i < CPU_IRQ_COUNT; ++i) {
+		avr->irq[i].flags |= IRQ_FLAG_FILTERED;
+		avr_irq_register_notify(avr->irq + i, avr_adc_irq_notify, avr);
+	}
 	avr_cmd_init(avr);
 	avr_interrupt_init(avr);
 	if (avr->custom.init)

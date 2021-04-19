@@ -92,7 +92,7 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 
 static const char *expected = "P<2A P<70 F<01 I<E4 P<E4 "
                               "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
-                              "P>01 J<03 J<00 P<E0 ";
+                              "P>01 J<03 J<00 P<E0 | K | ";
 
 /* This string is expected in variable log. */
 

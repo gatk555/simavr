@@ -8,7 +8,7 @@ At the time of writing (April 2021) this fork contains some new or updated items
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
 + Improvements to the ADC, particularly attinyX5.
-+ Some additional tests.
++ Some additional and some expanded tests.
 + Some Pull Requests that are not yet integrated upstream are included.
 + Miscellaneous bug fixes.
 
@@ -85,17 +85,18 @@ There are tools, for example
 <I>gtkwave</I>
 </A>
 for displaying VCD files but, as far as I know,
-no dedicated software tools for creating them.
+few dedicated software tools for creating them.
 Two programs that may help are
+<A href="https://github.com/lcgamboa/picsimlab">
+<I>PICSimLab</I>
+</A>
+and
 <A href="https://sourceforge.net/projects/simutron/">
 <I>simutron</I>
 </A>
-a graphical circuit designer/emulator that supports simavr,
-VCD and mouse input, and
-<A href="http://vcdmaker.org/">
-<I>vcdmaker</I>
-</A>
-a utility for extracting information from files and generating VCD data.
+They are both larger graphical circuit designer/emulator that include simavr
+as a component and have various input devices whose actions can be captured
+as VCD files.
 <P>
 VCD input files used for input must follow a convention for variable names
 that match the
@@ -105,8 +106,38 @@ format
 The inserted values correspond to the last two arguments to
 <I>avr_io_getirq(),</I>
 described below.
-The next section describes another option for creating VCD input files
-following that convention.
+If input files require translation,
+another program,
+<A href="http://vcdmaker.org/">
+<I>vcdmaker,</I>
+</A>
+may be useful.
+It is a utility for extracting information from various log files
+and generating VCD data.
+A following section describes another option for creating VCD input files
+that already follow simavr's rules.
+
+<H4>Debugging with run-avr.</H4>
+The simulator has support for debugging your firmware with the AVR version
+of the GNU debugger,
+<I>avr-gdb,</I>
+and it is as easy to use as ordinary debugging with the standard
+<I>gdb.</I>
+Simply run
+<I>simavr</I>
+as usual, with the extra option
+<I>--gdb</I>
+and put the process in the background.
+Then start
+<I>avr-gdb</I>
+with your firmware binary (ELF format with debugging symbols is best)
+as argument.
+The first gdb command should be:
+<PRE>
+  target remote :1234
+</PRE>
+That connects the debugger to the simulated AVR
+and following commands work normally.
 
 <H4>Options in firmware.</H4>
 A slightly unusual feature of
@@ -207,7 +238,7 @@ The code can be found in run_avr.c, or in the gatk555 fork
 there is a function
 <I>avr_setup_firmware()</I>
 declared in
-<I>simavr/simavr/sim/sim_hex</I>
+<I>simavr/simavr/sim/sim_hex.h</I>
 that handles both file formats.
 When using HEX format, the
 <I>elf_firmware_t</I>
@@ -401,7 +432,7 @@ For these peripherals, the external code needs to set a voltage
 (in millivolts) on an input pin.
 Simavr treats analogue input as completely separate from digital I/O,
 even though in reality they share pins.
-There is nothing in Simavr that connects the two, so it will allow you
+There is nothing in Simavr that connects the two, so it would allow you
 to do digital output on a pin that you are simultaneously using for
 analogue input.
 <P>
@@ -428,7 +459,7 @@ The analogue comparator can share the physical ADC inputs on some variants
 and has its own inputs.
 Simavr treats all of these as independent of both GIO and ADC inputs.
 Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 represent the same pin,
-those are different numbers and simavr will allow you to set
+those are different numbers and simavr would allow you to set
 different voltages.
 Providing input values for the comparator is similar to the ADC,
 except that monitoring is continuous,
@@ -552,7 +583,27 @@ static int my_avr_run(avr_t *avr)
     return avr->state;
 }
 </PRE>
+Interactive debugging also uses a variant run loop.
+The normal procedure is to copy
+<I>run_avr:</I>
+<PRE>
+	if (gdb) {
+		avr->state = cpu_Stopped;
+		avr_gdb_init(avr);
+	}
 
+        ...
+
+                for (;;) {
+                        int state = avr_run(avr);
+                        if (state == cpu_Done || state == cpu_Crashed)
+                                break;
+                }
+</PRE>
+If needed, the debugging run function
+<I>avr_callback_run_gdb()</I>
+can be called directly.
+<P>
 An application might also need to implement an additional AVR peripheral,
 real or virtual.
 For that, there are functions to monitor reads and writes
