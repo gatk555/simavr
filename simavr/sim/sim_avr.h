@@ -155,6 +155,8 @@ typedef void (*avr_run_t)(
 #define AVR_FUSE_HIGH	1
 #define AVR_FUSE_EXT	2
 
+#define REG_NAME_COUNT (256 + 32)       // Size of reg_names table.
+
 /*
  * Main AVR instance. Some of these fields are set by the AVR "Core" definition files
  * the rest is runtime data (as little as possible)
@@ -363,6 +365,11 @@ typedef struct avr_t {
 		uint32_t size;
 		uint32_t len;
 	} io_console_buffer;
+
+	// Table of register names used by gdb and tracing.
+
+	char * reg_names[REG_NAME_COUNT];
+
 } avr_t;
 
 // CPU IRQs and IOCTL to get them.
@@ -521,6 +528,10 @@ avr_pending_sleep_usec(
 uint64_t
 avr_get_time_stamp(
 		avr_t * avr );
+
+/* Return a register (CPU or IO) name. */
+
+const char * avr_regname(avr_t *avr, uint16_t reg);
 
 #ifdef __cplusplus
 };
