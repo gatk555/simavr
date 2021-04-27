@@ -31,8 +31,8 @@ extern "C" {
 	#define FONT_RED
 	#define FONT_DEFAULT
 #else
-	#define FONT_GREEN		"\e[32m"
-	#define FONT_RED		"\e[31m"
+	#define FONT_GREEN	"\e[32m"
+	#define FONT_RED	"\e[31m"
 	#define FONT_DEFAULT	"\e[0m"
 #endif
 
@@ -51,14 +51,9 @@ int _avr_push_addr(avr_t * avr, avr_flashaddr_t addr);
 #if CONFIG_SIMAVR_TRACE
 
 /*
- * Get a "pretty" register name
- */
-const char * avr_regname(uint8_t reg);
-
-/*
  * DEBUG bits follow
- * These will disappear when gdb arrives
  */
+
 void avr_dump_state(avr_t * avr);
 
 #define DUMP_REG() { \
