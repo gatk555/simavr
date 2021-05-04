@@ -375,9 +375,32 @@ elf_read_firmware(
 
 				// print out the value and size
 				if (ELF32_ST_BIND(sym.st_info) == STB_GLOBAL ||
-						ELF32_ST_TYPE(sym.st_info) == STT_FUNC ||
-						ELF32_ST_TYPE(sym.st_info) == STT_OBJECT) {
+                                    ELF32_ST_TYPE(sym.st_info) == STT_FUNC ||
+                                    ELF32_ST_TYPE(sym.st_info) == STT_OBJECT) {
 					const char * name = elf_strptr(elf, shdr.sh_link, sym.st_name);
+#if 0
+					printf("Symbol %s bind %d type %d value %lx size %ld visibility %d\n",
+					       name, ELF32_ST_BIND(sym.st_info),
+					       ELF32_ST_TYPE(sym.st_info),
+                                               sym.st_value, sym.st_size,
+                                               GELF_ST_VISIBILITY(sym.st_other));
+#endif
+					// Some names are lengths of data areas
+					// that are not obviously distinguished
+					// from labels like __vectors.
+
+					if (ELF32_ST_TYPE(sym.st_info) == STT_NOTYPE &&
+					    sym.st_size == 0) {
+						int n;
+
+						n = strlen(name);
+						if (n > 9 &&
+						    !strcmp(&name[n - 9],
+							    "_LENGTH__")) {
+							//printf(" Ignored\n");
+							continue;
+						}
+					}
 
 					// if its a bootloader, this symbol will be the entry point we need
 					if (!strcmp(name, "__vectors"))

@@ -63,19 +63,21 @@ int dont_trace(const char * name)
 int donttrace = 0;
 
 #define STATE(_f, args...) { \
+	const char * symn = "";\
 	if (avr->trace) {\
-		if (avr->trace_data->codeline && avr->trace_data->codeline[avr->pc>>1]) {\
-			const char * symn = avr->trace_data->codeline[avr->pc>>1]->symbol; \
+		if (avr->trace_data->codeline &&\
+		    avr->trace_data->codeline[avr->pc>>1]) {\
+			symn = avr->trace_data->codeline[avr->pc>>1]->symbol; \
 			int dont = 0 && dont_trace(symn);\
 			if (dont!=donttrace) { \
 				donttrace = dont;\
 				DUMP_REG();\
 			}\
-			if (donttrace==0)\
-				printf("%04x: %-25s " _f, avr->pc, symn, ## args);\
 		} else \
-			printf("%s: %04x: " _f, __FUNCTION__, avr->pc, ## args);\
+			donttrace = 0;\
 		}\
+		if (donttrace == 0)\
+			printf("%04x: %-25s " _f, avr->pc, symn, ## args); \
 	}
 #define SREG() if (avr->trace && donttrace == 0) {\
 	printf("%04x: \t\t\t\t\t\t\t\t\tSREG = ", avr->pc); \
@@ -344,10 +346,6 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 	}
 	return avr->reg_names[reg];
 }
-
-// In this file there is always an avr!
-
-#define AVR_REGNAME(reg) avr_regname(avr, reg)
 
 /*
  * Called when an invalid opcode is decoded
