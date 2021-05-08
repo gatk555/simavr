@@ -41,6 +41,21 @@
 #define O_BINARY 0
 #endif
 
+// "Spread" the pointers for known symbols forward.
+
+static void
+avr_spread_lines(const char **table, int count)
+{
+	const char * last = NULL;
+
+	for (int i = 0; i < count; i++) {
+		if (!table[i])
+			table[i] = last;
+		else
+			last = table[i];
+	}
+}
+
 void
 avr_load_firmware(
 		avr_t * avr,
@@ -55,22 +70,27 @@ avr_load_firmware(
 	if (firmware->aref)
 		avr->aref = firmware->aref;
 #if CONFIG_SIMAVR_TRACE && ELF_SYMBOLS
-	int scount = firmware->flashsize >> 1;
-	avr->trace_data->codeline = malloc(scount * sizeof(avr_symbol_t*));
-	memset(avr->trace_data->codeline, 0, scount * sizeof(avr_symbol_t*));
+	/* Store the symbols read from the ELF file. */
 
-	for (int i = 0; i < firmware->symbolcount; i++)
-		if (firmware->symbol[i]->addr < firmware->flashsize)	// code address
-			avr->trace_data->codeline[firmware->symbol[i]->addr >> 1] =
-				firmware->symbol[i];
-	// "spread" the pointers for known symbols forward
-	avr_symbol_t * last = NULL;
-	for (int i = 0; i < scount; i++) {
-		if (!avr->trace_data->codeline[i])
-			avr->trace_data->codeline[i] = last;
-		else
-			last = avr->trace_data->codeline[i];
+	int           scount = firmware->flashsize >> 1;
+	uint32_t      addr;
+        const char ** table;
+
+        table = calloc(scount, sizeof (char *));
+	avr->trace_data->codeline = table;
+
+	for (int i = 0; i < firmware->symbolcount; i++) {
+		addr = firmware->symbol[i]->addr;
+		if (addr < firmware->flashsize) {
+			// A code address.
+
+			table[addr >> 1] = firmware->symbol[i]->symbol;
+		} else if (addr <= avr->ramend &&
+			   !avr->data_names[addr]) {
+			avr->data_names[addr] = firmware->symbol[i]->symbol;
+		}
 	}
+	avr_spread_lines(table, scount);
 #endif
 
 	avr_loadcode(avr, firmware->flash,
