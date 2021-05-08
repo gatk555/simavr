@@ -106,7 +106,7 @@ enum {
 
 	cpu_Sleeping,	// we're now sleeping until an interrupt
 
-	cpu_Step,		// run ONE instruction, then...
+	cpu_Step,	// run ONE instruction, then...
 	cpu_StepDone,	// tell gdb it's all OK, and give it registers
         cpu_Fault,      // see avr_fault_current()
 	cpu_Done,       // avr software stopped gracefully
@@ -115,7 +115,7 @@ enum {
 
 // this is only ever used if CONFIG_SIMAVR_TRACE is defined
 struct avr_trace_data_t {
-	struct avr_symbol_t ** codeline;
+	const char **   codeline; // Text for each Flash address
 
 	/* DEBUG ONLY
 	 * this keeps track of "jumps" ie, call,jmp,ret,reti and so on
@@ -160,7 +160,7 @@ typedef void (*avr_run_t)(
  * the rest is runtime data (as little as possible)
  */
 typedef struct avr_t {
-	const char * 		mmcu;	// name of the AVR
+	const char *	 		mmcu;	// name of the AVR
 	// these are filled by sim_core_declare from constants in /usr/lib/avr/include/avr/io*.h
 	uint16_t			ioend;
 	uint16_t 			ramend;
@@ -360,7 +360,7 @@ typedef struct avr_t {
 
 	// Table of register names used by gdb and tracing.
 
-	char * reg_names[REG_NAME_COUNT];
+	const char ** data_names;
 
 } avr_t;
 
