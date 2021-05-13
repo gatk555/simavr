@@ -117,6 +117,7 @@ enum {
 struct avr_trace_data_t {
 	const char **   codeline;       // Text for each Flash address
 	uint32_t        codeline_size;  // Size of codeline table.
+	uint32_t        data_names_size;// Size of data_names table.
 
 	/* DEBUG ONLY
 	 * this keeps track of "jumps" ie, call,jmp,ret,reti and so on
@@ -153,8 +154,6 @@ typedef void (*avr_run_t)(
 #define AVR_FUSE_LOW	0
 #define AVR_FUSE_HIGH	1
 #define AVR_FUSE_EXT	2
-
-#define REG_NAME_COUNT (256 + 32)       // Size of reg_names table.
 
 /*
  * Main AVR instance. Some of these fields are set by the AVR "Core" definition files
