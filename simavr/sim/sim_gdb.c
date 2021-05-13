@@ -376,8 +376,8 @@ handle_io_registers(avr_t * avr, avr_gdb_t * g, char * cmd)
 
 			// Send names and values.
 			addr += 32 + g->ior_base;
-			if (addr + count > REG_NAME_COUNT)
-				count = REG_NAME_COUNT - addr;
+			if (addr + count > avr->ioend)
+				count = avr->ioend + 1 - addr;
 			reply = buff;
 			for (i = 0; i < count; ++i) {
 				const char *name;

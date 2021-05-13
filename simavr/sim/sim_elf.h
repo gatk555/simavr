@@ -79,9 +79,10 @@ typedef struct elf_firmware_t {
 
 #if ELF_SYMBOLS
 	avr_symbol_t **  symbol;
-	uint32_t		symbolcount;
-#endif
+	uint32_t	symbolcount;
+	uint32_t	highest_data_symbol;
 	char *		dwarf_file;	// Must be dynamically allocated.
+#endif
 } elf_firmware_t ;
 
 int
