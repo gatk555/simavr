@@ -67,7 +67,7 @@ int donttrace = 0;
 	if (avr->trace) {\
 		if (avr->trace_data->codeline &&\
 		    avr->trace_data->codeline[avr->pc>>1]) {\
-			symn = avr->trace_data->codeline[avr->pc>>1]->symbol; \
+			symn = avr->trace_data->codeline[avr->pc>>1]; \
 			int dont = 0 && dont_trace(symn);\
 			if (dont!=donttrace) { \
 				donttrace = dont;\
@@ -94,7 +94,12 @@ void crash(avr_t* avr)
 	for (int i = OLD_PC_SIZE-1; i > 0; i--) {
 		int pci = (avr->trace_data->old_pci + i) & 0xf;
 		printf(FONT_RED "*** %04x: %-25s RESET -%d; sp %04x\n" FONT_DEFAULT,
-				avr->trace_data->old[pci].pc, avr->trace_data->codeline ? avr->trace_data->codeline[avr->trace_data->old[pci].pc>>1]->symbol : "unknown", OLD_PC_SIZE-i, avr->trace_data->old[pci].sp);
+                       avr->trace_data->old[pci].pc,
+                       avr->trace_data->codeline ?
+                           avr->trace_data->codeline[avr->trace_data->old[pci].pc>>1] :
+                           "unknown",
+                       OLD_PC_SIZE-i,
+                       avr->trace_data->old[pci].sp);
 	}
 
 	printf("Stack Ptr %04x/%04x = %d \n", _avr_sp_get(avr), avr->ramend, avr->ramend - _avr_sp_get(avr));
@@ -348,7 +353,7 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 
         if (reg >= REG_NAME_COUNT)
 		return NULL;
-	if (!avr->reg_names[reg]) {
+	if (!avr->data_names[reg]) {
 		char tt[16];
 		if (reg < 26) {
 			sprintf(tt, "r%d", reg);
@@ -364,9 +369,9 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 			else
 				sprintf(tt, "io:%02x", reg);
 		}
-		avr->reg_names[reg] = strdup(tt);
+		avr->data_names[reg] = strdup(tt);
 	}
-	return avr->reg_names[reg];
+	return avr->data_names[reg];
 }
 
 // In this file there is always an avr!
@@ -384,7 +389,10 @@ static void _avr_invalid_opcode(avr_t * avr)
 {
 #if CONFIG_SIMAVR_TRACE
 	printf( FONT_RED "*** %04x: %-25s Invalid Opcode SP=%04x O=%04x \n" FONT_DEFAULT,
-			avr->pc, avr->trace_data->codeline[avr->pc>>1]->symbol, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc));
+                avr->pc,
+                avr->trace_data->codeline[avr->pc>>1],
+                _avr_sp_get(avr),
+                _avr_flash_read16le(avr, avr->pc));
 #else
 	AVR_LOG(avr, LOG_ERROR, FONT_RED "CORE: *** %04x: Invalid Opcode SP=%04x O=%04x \n" FONT_DEFAULT,
 			avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc));
