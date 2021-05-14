@@ -117,7 +117,8 @@ enum {
 
 // this is only ever used if CONFIG_SIMAVR_TRACE is defined
 struct avr_trace_data_t {
-	const char **   codeline; // Text for each Flash address
+	const char **   codeline;       // Text for each Flash address
+	uint32_t        codeline_size;  // Size of codeline table.
 
 	/* DEBUG ONLY
 	 * this keeps track of "jumps" ie, call,jmp,ret,reti and so on

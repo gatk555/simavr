@@ -80,11 +80,15 @@ int donttrace = 0;
 			printf("%04x: %-25s " _f, avr->pc, symn, ## args); \
 	}
 #define SREG() if (avr->trace && donttrace == 0) {\
-	printf("%04x: \t\t\t\t\t\t\t\t\tSREG = ", avr->pc); \
+	printf("%04x: \t\t\t\t\t\t\t\tSREG = ", avr->pc); \
 	for (int _sbi = 0; _sbi < 8; _sbi++)\
 		printf("%c", avr->sreg[_sbi] ? toupper(_sreg_bit_name[_sbi]) : '.');\
 	printf("\n");\
 }
+
+#define DAS(addr) (avr->data_names[addr])
+#define FAS(addr) (((addr >> 1) > avr->trace_data->codeline_size) ? \
+                   "[not loaded]" : avr->trace_data->codeline[addr >> 1])
 
 void crash(avr_t* avr)
 {
@@ -935,10 +939,12 @@ run_one_again:
 					uint16_t v = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
 					get_d5_q6(opcode);
 					if (opcode & 0x0200) {
-						STATE("st (Z+%d[%04x]), %s[%02x]\n", q, v+q, AVR_REGNAME(d), avr->base[d]);
+						STATE("st (Z+%d[%04x]), %s[%02x]  \t%s\n",
+						      q, v+q, AVR_REGNAME(d), avr->base[d], DAS(v + q));
 						_avr_set_ram(avr, v+q, avr->base[d]);
 					} else {
-						STATE("ld %s, (Z+%d[%04x])=[%02x]\n", AVR_REGNAME(d), q, v+q, avr->data[v+q]);
+						STATE("ld %s, (Z+%d[%04x])=[%02x]  \t%s\n",
+						      AVR_REGNAME(d), q, v+q, avr->data[v+q], DAS(v + q));
 						_avr_set_r(avr, d, _avr_get_ram(avr, v+q));
 					}
 					cycle += 1; // 2 cycles, 3 for tinyavr
@@ -948,10 +954,12 @@ run_one_again:
 					uint16_t v = avr->base[R_YL] | (avr->base[R_YH] << 8);
 					get_d5_q6(opcode);
 					if (opcode & 0x0200) {
-						STATE("st (Y+%d[%04x]), %s[%02x]\n", q, v+q, AVR_REGNAME(d), avr->base[d]);
+ 						STATE("st (Y+%d[%04x]), %s[%02x]  \t%s\n",
+						      q, v+q, AVR_REGNAME(d), avr->base[d], DAS(v + q));
 						_avr_set_ram(avr, v+q, avr->base[d]);
 					} else {
-						STATE("ld %s, (Y+%d[%04x])=[%02x]\n", AVR_REGNAME(d), q, v+q, avr->data[d+q]);
+						STATE("ld %s, (Y+%d[%04x])=[%02x]  \t%s\n",
+						      AVR_REGNAME(d), q, v+q, avr->data[d+q], DAS(v + q));
 						_avr_set_r(avr, d, _avr_get_ram(avr, v+q));
 					}
 					cycle += 1; // 2 cycles, 3 for tinyavr
@@ -1027,7 +1035,8 @@ run_one_again:
 				}	break;
 				case 0x95c8: {	// LPM -- Load Program Memory R0 <- (Z) -- 1001 0101 1100 1000
 					uint16_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
-					STATE("lpm %s, (Z[%04x])\n", AVR_REGNAME(0), z);
+					STATE("lpm %s, (Z[%04x]) \t%s\n",
+					      AVR_REGNAME(0), z, FAS(z));
 					cycle += 2; // 3 cycles
 					_avr_set_r(avr, 0, avr->flash[z]);
 				}	break;
@@ -1035,7 +1044,9 @@ run_one_again:
 					if (!avr->rampz)
 						_avr_invalid_opcode(avr);
 					uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) | (avr->data[avr->rampz] << 16);
-					STATE("elpm %s, (Z[%02x:%04x])\n", AVR_REGNAME(0), z >> 16, z & 0xffff);
+					STATE("elpm %s, (Z[%02x:%04x] \t%s)\n",
+					      AVR_REGNAME(0), z >> 16,
+					      z & 0xffff, FAS(z));
 					_avr_set_r(avr, 0, avr->flash[z]);
 					cycle += 2; // 3 cycles
 				}	break;
@@ -1045,7 +1056,8 @@ run_one_again:
 							get_d5(opcode);
 							uint16_t x = _avr_flash_read16le(avr, new_pc);
 							new_pc += 2;
-							STATE("lds %s[%02x], 0x%04x\n", AVR_REGNAME(d), avr->base[d], x);
+							STATE("lds %s[%02x], 0x%04x\t\t%s\n",
+							      AVR_REGNAME(d), avr->base[d], x, DAS(x));
 							_avr_set_r(avr, d, _avr_get_ram(avr, x));
 							cycle++; // 2 cycles
 						}	break;
@@ -1054,7 +1066,8 @@ run_one_again:
 							get_d5(opcode);
 							uint16_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
 							int op = opcode & 1;
-							STATE("lpm %s, (Z[%04x]%s)\n", AVR_REGNAME(d), z, op ? "+" : "");
+							STATE("lpm %s, (Z[%04x]%s)\t\t%s\n",
+							      AVR_REGNAME(d), z, op ? "+" : "", FAS(z));
 							_avr_set_r(avr, d, avr->flash[z]);
 							if (op) {
 								z++;
@@ -1069,7 +1082,8 @@ run_one_again:
 							uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) | (avr->data[avr->rampz] << 16);
 							get_d5(opcode);
 							int op = opcode & 1;
-							STATE("elpm %s, (Z[%02x:%04x]%s)\n", AVR_REGNAME(d), z >> 16, z & 0xffff, op ? "+" : "");
+							STATE("elpm %s, (Z[%02x:%04x]%s)\t\t%s\n",
+							      AVR_REGNAME(d), z >> 16, z & 0xffff, op ? "+" : "", FAS(z));
 							_avr_set_r(avr, d, avr->flash[z]);
 							if (op) {
 								z++;
@@ -1092,7 +1106,9 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t x = (avr->base[R_XH] << 8) | avr->base[R_XL];
-							STATE("ld %s, %sX[%04x]%s\n", AVR_REGNAME(d), op == 2 ? "--" : "", x, op == 1 ? "++" : "");
+							STATE("ld %s, %sX[%04x]%s  \t\t%s\n",
+							      AVR_REGNAME(d),
+							      op == 2 ? "--" : "", x, op == 1 ? "++" : "", DAS(x));
 							cycle++; // 2 cycles (1 for tinyavr, except with inc/dec 2)
 							if (op == 2) x--;
 							uint8_t vd = _avr_get_ram(avr, x);
@@ -1106,7 +1122,9 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t x = (avr->base[R_XH] << 8) | avr->base[R_XL];
-							STATE("st %sX[%04x]%s, %s[%02x] \n", op == 2 ? "--" : "", x, op == 1 ? "++" : "", AVR_REGNAME(d), vd);
+							STATE("st %sX[%04x]%s, %s[%02x]  \t\t%s\n",
+							      op == 2 ? "--" : "", x, op == 1 ? "++" : "",
+							      AVR_REGNAME(d), vd, DAS(x));
 							cycle++; // 2 cycles, except tinyavr
 							if (op == 2) x--;
 							_avr_set_ram(avr, x, vd);
@@ -1118,7 +1136,10 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t y = (avr->base[R_YH] << 8) | avr->base[R_YL];
-							STATE("ld %s, %sY[%04x]%s\n", AVR_REGNAME(d), op == 2 ? "--" : "", y, op == 1 ? "++" : "");
+							STATE("ld %s, %sY[%04x]%s  \t\t%s\n",
+							      AVR_REGNAME(d),
+							      op == 2 ? "--" : "", y, op == 1 ? "++" : "",
+							      DAS(y));
 							cycle++; // 2 cycles, except tinyavr
 							if (op == 2) y--;
 							uint8_t vd = _avr_get_ram(avr, y);
@@ -1131,7 +1152,9 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t y = (avr->base[R_YH] << 8) | avr->base[R_YL];
-							STATE("st %sY[%04x]%s, %s[%02x]\n", op == 2 ? "--" : "", y, op == 1 ? "++" : "", AVR_REGNAME(d), vd);
+							STATE("st %sY[%04x]%s, %s[%02x]  \t\t%s\n",
+							      op == 2 ? "--" : "", y, op == 1 ? "++" : "",
+							      AVR_REGNAME(d), vd, DAS(y));
 							cycle++;
 							if (op == 2) y--;
 							_avr_set_ram(avr, y, vd);
@@ -1142,7 +1165,8 @@ run_one_again:
 							get_vd5(opcode);
 							uint16_t x = _avr_flash_read16le(avr, new_pc);
 							new_pc += 2;
-							STATE("sts 0x%04x, %s[%02x]\n", x, AVR_REGNAME(d), vd);
+							STATE("sts 0x%04x, %s[%02x]\t\t%s\n",
+							      x, AVR_REGNAME(d), vd, DAS(x));
 							cycle++;
 							_avr_set_ram(avr, x, vd);
 						}	break;
@@ -1151,7 +1175,8 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t z = (avr->base[R_ZH] << 8) | avr->base[R_ZL];
-							STATE("ld %s, %sZ[%04x]%s\n", AVR_REGNAME(d), op == 2 ? "--" : "", z, op == 1 ? "++" : "");
+							STATE("ld %s, %sZ[%04x]%s  \t\t%s\n", AVR_REGNAME(d),
+							      op == 2 ? "--" : "", z, op == 1 ? "++" : "", DAS(z));
 							cycle++;; // 2 cycles, except tinyavr
 							if (op == 2) z--;
 							uint8_t vd = _avr_get_ram(avr, z);
@@ -1164,7 +1189,9 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t z = (avr->base[R_ZH] << 8) | avr->base[R_ZL];
-							STATE("st %sZ[%04x]%s, %s[%02x] \n", op == 2 ? "--" : "", z, op == 1 ? "++" : "", AVR_REGNAME(d), vd);
+							STATE("st %sZ[%04x]%s, %s[%02x]  \t\t%s\n",
+							      op == 2 ? "--" : "", z, op == 1 ? "++" : "",
+							      AVR_REGNAME(d), vd, DAS(z));
 							cycle++; // 2 cycles, except tinyavr
 							if (op == 2) z--;
 							_avr_set_ram(avr, z, vd);

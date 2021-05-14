@@ -80,6 +80,7 @@ avr_load_firmware(
 
         table = calloc(scount, sizeof (char *));
 	avr->trace_data->codeline = table;
+	avr->trace_data->codeline_size = scount;
 
 	for (int i = 0; i < firmware->symbolcount; i++) {
 		addr = firmware->symbol[i]->addr;
@@ -87,12 +88,27 @@ avr_load_firmware(
 			// A code address.
 
 			table[addr >> 1] = firmware->symbol[i]->symbol;
-		} else if (addr <= avr->ramend &&
-			   !avr->data_names[addr]) {
-			avr->data_names[addr] = firmware->symbol[i]->symbol;
+		} else if (addr >= AVR_SEGMENT_OFFSET_DATA &&
+			   addr <= AVR_SEGMENT_OFFSET_DATA + avr->ramend) {
+			addr -= AVR_SEGMENT_OFFSET_DATA;
+			if (!avr->data_names[addr]) {
+				avr->data_names[addr] =
+					firmware->symbol[i]->symbol;
+			}
 		}
 	}
+
+	// Parse given ELF file for DWARF info.
+
+	if (firmware->dwarf_file)
+		avr_read_dwarf(avr, firmware->dwarf_file);
+	free(firmware->dwarf_file);
+
+	// Fill out the flash and data space name tables with duplicates.
+
 	avr_spread_lines(table, scount);
+	avr_spread_lines(avr->data_names + avr->ioend + 1,
+			 avr->ramend - avr->ioend);
 #endif
 
 	avr_loadcode(avr, firmware->flash,
@@ -353,6 +369,12 @@ elf_read_firmware(
 	// Iterate through section headers again this time well stop when we find symbols
 	elf = elf_begin(fd, ELF_C_READ, NULL);
 	//printf("Loading elf %s : %p\n", file, elf);
+
+	if (!elf)
+		return -1;
+
+	if (!firmware->dwarf_file)
+		firmware->dwarf_file = strdup(file);	// Parse later.
 
 	Elf_Scn *scn = NULL;                   /* Section Descriptor */
 
