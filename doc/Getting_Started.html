@@ -109,11 +109,9 @@ A following section describes another option for creating VCD input files
 that already follow simavr's rules.
 
 <H4>Debugging with run-avr.</H4>
-The simulator has support for debugging your firmware with the AVR version
+The simulator has support for debugging firmware with the AVR version
 of the GNU debugger,
-<I>avr-gdb,</I>
-and it is as easy to use as ordinary debugging with the standard
-<I>gdb.</I>
+<I>avr-gdb.</I>
 Simply run
 <I>simavr</I>
 as usual, with the extra option
@@ -127,8 +125,40 @@ The first gdb command should be:
 <PRE>
   target remote :1234
 </PRE>
-That connects the debugger to the simulated AVR
-and following commands work normally.
+That connects the debugger to the simulated AVR.
+Following that there is little difference from ordinary debugging
+with the standard
+<I>gdb.</I>
+An initial gdb command can be included in the shell command:
+<PRE>
+   avr-gdb -ex 'target remote :1234' firmware.elf
+</PRE>
+Gdb has an command,
+<I>monitor,</I>
+for sending device-specific commands to the device being debugged.
+With
+<I>simavr</I>
+the subcommands
+<I>halt</I>
+and
+<I>reset</I>
+are supported.
+<P>
+This fork has added support for the standard avr-gcc command,
+<PRE>
+  info io_registers
+</PRE>
+for displaying I/O register names and values and
+<PRE>
+  monitor ior hex-base-address register-count
+</PRE>
+to specify a sub-range of I/O registers to be shown.
+Without arguments,
+<I>monitor ior</I>
+returns to displaying all the I/O registers.
+Several 
+<I>monitor</I>
+sub-commands can be combined on one line.
 
 <H4>Options in firmware.</H4>
 A slightly unusual feature of
