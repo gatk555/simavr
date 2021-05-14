@@ -108,6 +108,8 @@ static void process(struct ctx *ctxp, Dwarf_Die die)
 
         rv = dwarf_get_loclist_c(attr, &head, &count, &err);
         CHECK("dwarf_get_loclist_c");
+        if (rv ==  DW_DLV_NO_ENTRY)
+            goto clean;
         rv = dwarf_get_locdesc_entry_c(head, 0, &value, &addr, &addr2,
                                        &op_count, &loc, &list_type,
                                        &off1, &off2, &err);
@@ -135,10 +137,11 @@ static void process(struct ctx *ctxp, Dwarf_Die die)
 
                     /* Is it an I/O register? */
 
+                    if (symv > 32 &&
 #if CONFIG_SIMAVR_TRACE
-                    if (symv <= avr->ramend &&
+                    symv < avr->trace_data->data_names_size &&
 #else
-                    if (symv > 32 && symv <= avr->ioend &&
+                    symv <= avr->ioend &&
 #endif
                         !avr->data_names[symv]) {
                         avr->data_names[symv] = strdup(name);

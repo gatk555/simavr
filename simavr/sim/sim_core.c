@@ -75,9 +75,9 @@ int donttrace = 0;
 			}\
 		} else \
 			donttrace = 0;\
-		}\
 		if (donttrace == 0)\
 			printf("%04x: %-25s " _f, avr->pc, symn, ## args); \
+		}\
 	}
 #define SREG() if (avr->trace && donttrace == 0) {\
 	printf("%04x: \t\t\t\t\t\t\t\tSREG = ", avr->pc); \
@@ -86,7 +86,19 @@ int donttrace = 0;
 	printf("\n");\
 }
 
-#define DAS(addr) (avr->data_names[addr])
+static const char *get_data_address_string(avr_t* avr, uint16_t addr)
+{
+	if (addr <= avr->ioend) {
+		return avr_regname(avr, addr);
+	} else if (addr < avr->trace_data->data_names_size) {
+		return avr->data_names[addr];
+	} else if (addr > _avr_sp_get(avr)) {
+		return "[Stack]";
+	}
+	return "[Heap]";
+}
+
+#define DAS(addr) get_data_address_string(avr, addr)
 #define FAS(addr) (((addr >> 1) > avr->trace_data->codeline_size) ? \
                    "[not loaded]" : avr->trace_data->codeline[addr >> 1])
 
@@ -355,7 +367,7 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 {
 	static const char pairs[] = {'X', 'Y', 'Z'};
 
-        if (reg >= REG_NAME_COUNT)
+        if (reg > avr->ioend)
 		return NULL;
 	if (!avr->data_names[reg]) {
 		char tt[16];
@@ -1106,7 +1118,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t x = (avr->base[R_XH] << 8) | avr->base[R_XL];
-							STATE("ld %s, %sX[%04x]%s  \t\t%s\n",
+							STATE("ld %s, %sX[%04x]%s \t\t%s\n",
 							      AVR_REGNAME(d),
 							      op == 2 ? "--" : "", x, op == 1 ? "++" : "", DAS(x));
 							cycle++; // 2 cycles (1 for tinyavr, except with inc/dec 2)
@@ -1122,7 +1134,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t x = (avr->base[R_XH] << 8) | avr->base[R_XL];
-							STATE("st %sX[%04x]%s, %s[%02x]  \t\t%s\n",
+							STATE("st %sX[%04x]%s, %s[%02x] \t\t%s\n",
 							      op == 2 ? "--" : "", x, op == 1 ? "++" : "",
 							      AVR_REGNAME(d), vd, DAS(x));
 							cycle++; // 2 cycles, except tinyavr
@@ -1136,7 +1148,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t y = (avr->base[R_YH] << 8) | avr->base[R_YL];
-							STATE("ld %s, %sY[%04x]%s  \t\t%s\n",
+							STATE("ld %s, %sY[%04x]%s \t\t%s\n",
 							      AVR_REGNAME(d),
 							      op == 2 ? "--" : "", y, op == 1 ? "++" : "",
 							      DAS(y));
@@ -1152,7 +1164,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t y = (avr->base[R_YH] << 8) | avr->base[R_YL];
-							STATE("st %sY[%04x]%s, %s[%02x]  \t\t%s\n",
+							STATE("st %sY[%04x]%s, %s[%02x] \t\t%s\n",
 							      op == 2 ? "--" : "", y, op == 1 ? "++" : "",
 							      AVR_REGNAME(d), vd, DAS(y));
 							cycle++;
@@ -1175,7 +1187,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_d5(opcode);
 							uint16_t z = (avr->base[R_ZH] << 8) | avr->base[R_ZL];
-							STATE("ld %s, %sZ[%04x]%s  \t\t%s\n", AVR_REGNAME(d),
+							STATE("ld %s, %sZ[%04x]%s \t\t%s\n", AVR_REGNAME(d),
 							      op == 2 ? "--" : "", z, op == 1 ? "++" : "", DAS(z));
 							cycle++;; // 2 cycles, except tinyavr
 							if (op == 2) z--;
@@ -1189,7 +1201,7 @@ run_one_again:
 							int op = opcode & 3;
 							get_vd5(opcode);
 							uint16_t z = (avr->base[R_ZH] << 8) | avr->base[R_ZL];
-							STATE("st %sZ[%04x]%s, %s[%02x]  \t\t%s\n",
+							STATE("st %sZ[%04x]%s, %s[%02x] \t\t%s\n",
 							      op == 2 ? "--" : "", z, op == 1 ? "++" : "",
 							      AVR_REGNAME(d), vd, DAS(z));
 							cycle++; // 2 cycles, except tinyavr

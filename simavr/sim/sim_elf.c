@@ -42,6 +42,26 @@
 #endif
 
 #if CONFIG_SIMAVR_TRACE && ELF_SYMBOLS
+// Put a symbol name in a table, preferring names without leadling '_'.
+
+static void
+elf_set_preferred(const char **sp, const char *new)
+{
+	if (*sp) {
+		char c;
+
+		// Replace duplicates beginning '_'.
+
+		c = **sp;
+		if (c != '_' && c)
+			return;
+
+		// Most of array already leaks - FIXME
+		//free((void *)*sp);
+	}
+	*sp = new;
+}
+
 // "Spread" the pointers for known symbols forward.
 
 static void
@@ -78,23 +98,45 @@ avr_load_firmware(
 	uint32_t      addr;
         const char ** table;
 
+	// Allocate table of Flash address strings.
+
         table = calloc(scount, sizeof (char *));
 	avr->trace_data->codeline = table;
 	avr->trace_data->codeline_size = scount;
 
+	// Re-allocate table of data address strings.
+
+	if (firmware->highest_data_symbol >= avr->trace_data->data_names_size) {
+		uint32_t new_size;
+
+		new_size = firmware->highest_data_symbol + 1;
+		avr->data_names = realloc(avr->data_names,
+					  new_size * sizeof (char *));
+		memset(avr->data_names + avr->trace_data->data_names_size,
+		       0,
+		       (new_size - avr->trace_data->data_names_size) *
+		           sizeof (char *));
+		avr->trace_data->data_names_size = new_size;
+	}
+
 	for (int i = 0; i < firmware->symbolcount; i++) {
+		const char **sp, *new;
+
+		new = firmware->symbol[i]->symbol;
 		addr = firmware->symbol[i]->addr;
 		if (addr < firmware->flashsize) {
 			// A code address.
 
-			table[addr >> 1] = firmware->symbol[i]->symbol;
+			sp = &table[addr >> 1];
+			elf_set_preferred(sp, new);
 		} else if (addr >= AVR_SEGMENT_OFFSET_DATA &&
-			   addr <= AVR_SEGMENT_OFFSET_DATA + avr->ramend) {
+			   addr < AVR_SEGMENT_OFFSET_DATA +
+                           	  avr->trace_data->data_names_size) {
+			// Address in data space.
+
 			addr -= AVR_SEGMENT_OFFSET_DATA;
-			if (!avr->data_names[addr]) {
-				avr->data_names[addr] =
-					firmware->symbol[i]->symbol;
-			}
+			sp = &avr->data_names[addr];
+			elf_set_preferred(sp, new);
 		}
 	}
 
@@ -108,7 +150,7 @@ avr_load_firmware(
 
 	avr_spread_lines(table, scount);
 	avr_spread_lines(avr->data_names + avr->ioend + 1,
-			 avr->ramend - avr->ioend);
+			 avr->trace_data->data_names_size - (avr->ioend + 1));
 #endif
 
 	avr_loadcode(avr, firmware->flash,
@@ -406,6 +448,8 @@ elf_read_firmware(
 #if ELF_SYMBOLS
 		// When we find a section header marked SHT_SYMTAB stop and get symbols
 		if (shdr.sh_type == SHT_SYMTAB) {
+			uint32_t highest_data = 0;
+
 			// edata points to our symbol table
 			Elf_Data *edata = elf_getdata(scn, NULL);
 
@@ -424,7 +468,7 @@ elf_read_firmware(
                                     ELF32_ST_TYPE(sym.st_info) == STT_FUNC ||
                                     ELF32_ST_TYPE(sym.st_info) == STT_OBJECT) {
 					const char * name = elf_strptr(elf, shdr.sh_link, sym.st_name);
-#if 0
+#if VERBOSE
 					printf("Symbol %s bind %d type %d value %lx size %ld visibility %d\n",
 					       name, ELF32_ST_BIND(sym.st_info),
 					       ELF32_ST_TYPE(sym.st_info),
@@ -446,6 +490,18 @@ elf_read_firmware(
 							//printf(" Ignored\n");
 							continue;
 						}
+					}
+
+					// Look for the highest RAM sysmbol.
+
+					if (sym.st_value >
+					    AVR_SEGMENT_OFFSET_DATA +
+					        highest_data &&
+					    sym.st_value <
+					        AVR_SEGMENT_OFFSET_EEPROM) {
+						highest_data =
+                                                    sym.st_value + sym.st_size -
+						    AVR_SEGMENT_OFFSET_DATA;
 					}
 
 					// if its a bootloader, this symbol will be the entry point we need
@@ -474,6 +530,7 @@ elf_read_firmware(
 					firmware->symbolcount++;
 				}
 			}
+			firmware->highest_data_symbol = highest_data;
 		}
 #endif
 	}
