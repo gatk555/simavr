@@ -56,8 +56,12 @@ int _avr_push_addr(avr_t * avr, avr_flashaddr_t addr);
 
 void avr_dump_state(avr_t * avr);
 
+// In this file there is always an avr!
+
+#define AVR_REGNAME(reg) avr_regname(avr, reg)
+
 #define DUMP_REG() { \
-				for (int i = 0; i < 32; i++) printf("%s=%02x%c", avr_regname(i), avr->data[i],i==15?'\n':' ');\
+				for (int i = 0; i < 32; i++) printf("%s=%02x%c", AVR_REGNAME(i), avr->data[i],i==15?'\n':' ');\
 				printf("\n");\
 				uint16_t y = avr->data[R_YL] | (avr->data[R_YH]<<8);\
 				for (int i = 0; i < 20; i++) printf("Y+%02d=%02x ", i, avr->data[y+i]);\
