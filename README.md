@@ -2,15 +2,37 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (April 2021) this fork contains some new or updated items.
+At the time of writing (May 2021) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
-+ Improvements to the ADC, particularly attinyX5.
++ Support for avr-gdb's 'info io_registers' command.
++ ELF format firmware is parsed for debugging information, see below.
++ New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
 + Some Pull Requests that are not yet integrated upstream are included.
 + Miscellaneous bug fixes.
+
+There is an additional library dependency, libdwarf, that extracts
+debugging information from ELF files, including register names and source
+code line numbers.
+The register names are shown in gdb, while line numbers, register names and
+variable names have been added to instruction tracing output:
+<PRE>
+0164: main                      ldi r24, 0xff
+                                       ->> r24=ff 
+0166: main                      out DDRB, r24[ff]
+                                       ->> DDRB=ff 
+0168: main L.85                 out DDRC, r1[00]
+                                       ->> DDRC=00 
+016a: main L.87                 lds r24[ff], 0x006c             PCMSK1
+                                       ->> r24=00 
+016e: main L.87                 ori r24[00], 0x01
+016e:                                                           SREG = ........
+                                       ->> r24=01 
+0170: main L.87                 sts 0x006c, r24[01]             PCMSK1
+</PRE>
 
 <H3>Getting Started with Simavr. </H3>
 This is a guide to getting started with,
@@ -118,11 +140,9 @@ A following section describes another option for creating VCD input files
 that already follow simavr's rules.
 
 <H4>Debugging with run-avr.</H4>
-The simulator has support for debugging your firmware with the AVR version
+The simulator has support for debugging firmware with the AVR version
 of the GNU debugger,
-<I>avr-gdb,</I>
-and it is as easy to use as ordinary debugging with the standard
-<I>gdb.</I>
+<I>avr-gdb.</I>
 Simply run
 <I>simavr</I>
 as usual, with the extra option
@@ -136,8 +156,40 @@ The first gdb command should be:
 <PRE>
   target remote :1234
 </PRE>
-That connects the debugger to the simulated AVR
-and following commands work normally.
+That connects the debugger to the simulated AVR.
+Following that there is little difference from ordinary debugging
+with the standard
+<I>gdb.</I>
+An initial gdb command can be included in the shell command:
+<PRE>
+   avr-gdb -ex 'target remote :1234' firmware.elf
+</PRE>
+Gdb has an command,
+<I>monitor,</I>
+for sending device-specific commands to the device being debugged.
+With
+<I>simavr</I>
+the subcommands
+<I>halt</I>
+and
+<I>reset</I>
+are supported.
+<P>
+This fork has added support for the standard avr-gcc command,
+<PRE>
+  info io_registers
+</PRE>
+for displaying I/O register names and values and
+<PRE>
+  monitor ior hex-base-address register-count
+</PRE>
+to specify a sub-range of I/O registers to be shown.
+Without arguments,
+<I>monitor ior</I>
+returns to displaying all the I/O registers.
+Several 
+<I>monitor</I>
+sub-commands can be combined on one line.
 
 <H4>Options in firmware.</H4>
 A slightly unusual feature of
