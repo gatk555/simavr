@@ -41,6 +41,10 @@ ifeq ($(wildcard sim/blink/sim.h),)
 else
     panel   := ${OBJ}/panel.o
     CFLAGS += -DCONFIG_PANEL=1
+    LDFLAGS += -ldl
+ifneq ($(RELEASE),1)
+    LFLAGS += -Wl,-rpath,${shell realpath ${SIMAVR}/sim/blink}
+endif
 endif
 
 cores	:= ${wildcard cores/*.c}
@@ -68,7 +72,6 @@ endif
 
 ${OBJ}/${target}.elf	: libsimavr
 ${OBJ}/${target}.elf	: ${OBJ}/${target}.o ${panel}
-	${CC} -o $@ ${filter %.o,$^} -ldl ${LDFLAGS}
 
 ${target}	: ${OBJ}/${target}.elf
 
