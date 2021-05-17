@@ -36,7 +36,7 @@
 
 //#define VERBOSE
 #define CHECK(fn) \
-    if (rv == DW_DLV_ERROR) { error(fn, err); siglongjmp(ctxp->err_jmp, 1); }
+    if (rv != DW_DLV_OK) { error(fn, err); siglongjmp(ctxp->err_jmp, 1); }
 #define DATA_OFFSET 0x800000
 
 /* Context passed to functions in this file. */
@@ -102,14 +102,14 @@ static void process(struct ctx *ctxp, Dwarf_Die die)
          */
 
         rv = dwarf_attr(die, DW_AT_location, &attr, &err);
-        CHECK("dwarf_attr");
         if (rv ==  DW_DLV_NO_ENTRY)
             goto clean;
+        CHECK("dwarf_attr");
 
         rv = dwarf_get_loclist_c(attr, &head, &count, &err);
-        CHECK("dwarf_get_loclist_c");
-        if (rv ==  DW_DLV_NO_ENTRY)
+        if (rv ==  DW_DLV_NO_ENTRY || count == 0)
             goto clean;
+        CHECK("dwarf_get_loclist_c");
         rv = dwarf_get_locdesc_entry_c(head, 0, &value, &addr, &addr2,
                                        &op_count, &loc, &list_type,
                                        &off1, &off2, &err);
@@ -203,7 +203,7 @@ static void traverse_tree(struct ctx *ctxp, Dwarf_Die start)
     rv = dwarf_child(start, &die, &err);
     if (rv == DW_DLV_OK)
         traverse_tree(ctxp, die);
-    else 
+    else if (rv != DW_DLV_NO_ENTRY)
         CHECK("dwarf_child");
 
     /* Examine siblings. */
@@ -212,7 +212,7 @@ static void traverse_tree(struct ctx *ctxp, Dwarf_Die start)
     rv = dwarf_siblingof_b(db, start, 1, &die, &err);
     if (rv == DW_DLV_OK)
         traverse_tree(ctxp, die);
-    else 
+    else if (rv != DW_DLV_NO_ENTRY)
         CHECK("dwarf_siblingof_b");
     dwarf_dealloc(db, start, DW_DLA_DIE);
 }
@@ -226,9 +226,18 @@ static void get_lines(struct ctx *ctxp, Dwarf_Die die)
     int                 rv;
 
     rv = dwarf_srclines_b(die, &version, &single, &ctxp->lc, &err);
+    if (rv == DW_DLV_NO_ENTRY) {
+        ctxp->lc = NULL;
+        return;
+    }
     CHECK("dwarf_srclines_b");
     rv = dwarf_srclines_from_linecontext(ctxp->lc, &ctxp->lines,
                                          &ctxp->line_count, &err);
+    rv = dwarf_srclines_b(die, &version, &single, &ctxp->lc, &err);
+    if (rv == DW_DLV_NO_ENTRY) {
+        ctxp->line_count = 0;
+        return;
+    }
     CHECK("dwarf_srclines_from_linecontext");
     if (ctxp->line_count == 0)
         return;
@@ -298,6 +307,8 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
         /* Sibling of NULL is Compiliation Unit's Debug Information Element. */
 
         rv = dwarf_siblingof_b(ctx.db, NULL, 1, &die, &err);
+        if (rv == DW_DLV_NO_ENTRY)
+            continue;
         CHECK("dwarf_siblingof_b");
 
 #if CONFIG_SIMAVR_TRACE
@@ -316,6 +327,8 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
             CHECK("dwarf_lineno");
             rv = dwarf_lineaddr(ctx.lines[i], &addr, &err);
             CHECK("dwarf_lineaddr");
+            if (addr == 0) // Inlined?
+                continue;
             ep = avr->trace_data->codeline + (addr >> 1);
             if (*ep) {
                 // Already labeled.
@@ -331,7 +344,8 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
             *ep = strdup(buff);
         }
         dwarf_dealloc(ctx.db, ctx.cu_name, DW_DLA_STRING);
-        dwarf_srclines_dealloc_b(ctx.lc);
+        if (ctx.lc)
+            dwarf_srclines_dealloc_b(ctx.lc);
 #else
         traverse_tree(&ctx, die);
 #endif
