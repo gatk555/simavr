@@ -148,16 +148,20 @@ main(
 			display_usage(basename(argv[0]));
 		} else if (!strcmp(argv[pi], "-m") ||
                            !strcmp(argv[pi], "--mcu")) {
-			if (pi < argc-1)
+			if (pi < argc-1) {
 				snprintf(name, sizeof(name), "%s", argv[++pi]);
-			else
+				strcpy(f.mmcu, name);
+			} else {
 				display_usage(basename(argv[0]));
+			}
 		} else if (!strcmp(argv[pi], "-f") ||
                            !strcmp(argv[pi], "--freq")) {
-			if (pi < argc-1)
+			if (pi < argc-1) {
 				f_cpu = atoi(argv[++pi]);
-			else
+				f.frequency = f_cpu;
+			} else {
 				display_usage(basename(argv[0]));
+			}
 		} else if (!strcmp(argv[pi], "-i") ||
                            !strcmp(argv[pi], "--input")) {
 			if (pi < argc-1)
@@ -279,11 +283,14 @@ main(
 		} else if (!strcmp(argv[pi], "-ff")) {
 			loadBase = AVR_SEGMENT_OFFSET_FLASH;
 		} else if (argv[pi][0] != '-') {
-                        firmware = argv[pi];
-                        avr_setup_firmware(firmware, loadBase, &f,
-                                           (name[0] && f_cpu), argv[0]);
+			firmware = argv[pi];
+			avr_setup_firmware(firmware, loadBase, &f, argv[0]);
 		}
 	}
+
+	// Frequency and MCU type were set early so they can be checked when
+	// loading a hex file. Set them again because they can also be set
+ 	// in an ELF firmware file.
 
 	if (strlen(name))
 		strcpy(f.mmcu, name);

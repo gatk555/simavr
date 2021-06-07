@@ -202,18 +202,16 @@ read_ihex_file(
 
 void
 avr_setup_firmware(const char * filename, uint32_t loadBase,
-                   elf_firmware_t * fp, int hex_ok, const char * progname)
+                   elf_firmware_t * fp, const char * progname)
 {
         char * suffix = strrchr(filename, '.');
 
         if (suffix && !strcasecmp(suffix, ".hex")) {
-                if (!hex_ok) {
-                        fprintf(stderr,
-                                "%s: -mcu and -freq are mandatory "
-                                "to load .hex files\n",
-                                progname);
-                        exit(1);
-                }
+		if (!(fp->mmcu[0] && fp->frequency > 0)) {
+			fprintf(stderr,
+				"MCU type and frequency are not set "
+				"when loading .hex file\n");
+		}
                 ihex_chunk_p chunk = NULL;
                 int cnt = read_ihex_chunks(filename, &chunk);
                 if (cnt <= 0) {
