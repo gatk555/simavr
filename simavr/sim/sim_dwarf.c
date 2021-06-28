@@ -282,7 +282,8 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
     ctx.avr = avr;
     rv = dwarf_init_b(fd, DW_DLC_READ, 0, NULL, NULL, &ctx.db, &err);
     if (rv != DW_DLV_OK) {
-        error("dwarf_init_b", err);
+        if (rv == DW_DLV_ERROR)
+            error("dwarf_init_b", err);
         return 1;
     }
 
