@@ -243,9 +243,10 @@ static void get_lines(struct ctx *ctxp, Dwarf_Die die)
         return;
 
     rv = dwarf_diename(die, &ctxp->cu_name, &err);
-    CHECK("dwarf_diename");
     if (rv == DW_DLV_NO_ENTRY)
         ctxp->cu_name = "";
+    else
+        CHECK("dwarf_diename");
 #ifdef VERBOSE
     printf("Line table for %s:\n\n", ctxp->cu_name);
     for (int i = 0; i < ctxp->line_count; ++i) {
