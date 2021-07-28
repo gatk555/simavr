@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (May 2021) this fork contains some new or updated items.
+At the time of writing (July 2021) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -11,7 +11,7 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
-+ Some Pull Requests that are not yet integrated upstream are included.
++ Some Pull Requests that are not yet integrated upstream may be included.
 + Miscellaneous bug fixes.
 
 There is an additional library dependency, libdwarf, that extracts
@@ -83,14 +83,14 @@ identifies the target AVR part
 and is used to select the appropriate compiler options.
 If your new directory has a name beginning "board_",
 the Makefile will be called by those higher in the directory tree.
-The execute your firmware, invoke
+To execute your firmware, invoke
 <I>run-avr</I>
 with the compiled firmware as the only non-option argument.
 <P>
 While your firmware is running,
 <I>run-avr</I>
 can show the instructions being executed, using the
-<I>"-trace"</I>
+<I>"--trace"</I>
 option, and can also trace actions in the peripherals.
 These tracing options are disabled by default and are enabled by modifying
 <I>simavr/Makefile</I> to turn on CONFIG_SIMAVR_TRACE and recompiling.
@@ -164,7 +164,7 @@ An initial gdb command can be included in the shell command:
 <PRE>
    avr-gdb -ex 'target remote :1234' firmware.elf
 </PRE>
-Gdb has an command,
+Gdb has a command,
 <I>monitor,</I>
 for sending device-specific commands to the device being debugged.
 With
