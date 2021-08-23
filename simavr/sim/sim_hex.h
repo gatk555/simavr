@@ -35,11 +35,11 @@ extern "C" {
 struct elf_firmware_t;                          // Predeclaration ...
 
 void
-avr_setup_firmware(
-                   const char * filename,       // Firmware file
-                   uint32_t loadBase,           // Base of load region
-                   struct elf_firmware_t * fp,  // Data returned here
-                   const char * progname);      // For error messages.
+sim_setup_firmware(
+				   const char * filename,       // Firmware file
+				   uint32_t loadBase,           // Base of load region
+				   struct elf_firmware_t * fp,  // Data returned here
+				   const char * progname);      // For error messages.
 
 // parses a hex text string 'src' of at max 'maxlen' characters, decodes it into 'buffer'
 int

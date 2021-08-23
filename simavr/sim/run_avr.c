@@ -1,4 +1,9 @@
-/* -*- mode: C; eval: (setq c-basic-offset 8); -*- (emacs magic) */
+/* -*- mode: C; eval:
+   (setq tab-width 4)
+   (setq c-basic-offset 4)
+   (setq indent-tabs-mode t); -*- (emacs magic)
+ */
+
 /*
 	run_avr.c
 
@@ -47,7 +52,7 @@ display_usage(
 	 "       [--list-irqs]       List all supported IRQs for given core and exit\n"
 	 "       [-v]                Raise verbosity level\n"
 	 "                           (can be passed more than once)\n"
-         "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
+	 "       [--freq|-f <freq>]  Sets the frequency for an .hex firmware\n"
 	 "       [--mcu|-m <device>] Sets the MCU type for an .hex firmware\n"
 	 "       [--gdb|-g [<port>]] Listen for gdb connection on <port> "
                 "(default 1234)\n"
@@ -69,8 +74,7 @@ display_usage(
 	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
 	 "       [-ee <.hex file>]   Load next .hex file as eeprom\n"
 	 "       <firmware>          A .hex or an ELF file. ELF files are\n"
-	 "                           preferred, and can include "
-                "debugging syms\n");
+	 "                           preferred, and can include debugging syms\n");
 	exit(1);
 }
 
@@ -127,7 +131,7 @@ main(
 	int list_irqs = 0;
 	int log = 1;
 	int port = 1234;
-        char name[24] = "";
+	char name[24] = "";
 	uint32_t loadBase = AVR_SEGMENT_OFFSET_FLASH;
 	int trace_vectors[8] = {0};
 	int trace_vectors_count = 0;
@@ -140,62 +144,51 @@ main(
 	for (int pi = 1; pi < argc; pi++) {
 		if (!strcmp(argv[pi], "--list-cores")) {
 			list_cores();
-                } else if (!strcmp(argv[pi], "--list-irqs")) {
+		} else if (!strcmp(argv[pi], "--list-irqs")) {
 			list_irqs = 1;
-		} else if (!strcmp(argv[pi], "-?") ||
-                           !strcmp(argv[pi], "-h") ||
-                           !strcmp(argv[pi], "--help")) {
+		} else if (!strcmp(argv[pi], "-?") || !strcmp(argv[pi], "-h") ||
+				   !strcmp(argv[pi], "--help")) {
 			display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-m") ||
-                           !strcmp(argv[pi], "--mcu")) {
+		} else if (!strcmp(argv[pi], "-m") || !strcmp(argv[pi], "--mcu")) {
 			if (pi < argc-1) {
 				snprintf(name, sizeof(name), "%s", argv[++pi]);
 				strcpy(f.mmcu, name);
 			} else {
 				display_usage(basename(argv[0]));
 			}
-		} else if (!strcmp(argv[pi], "-f") ||
-                           !strcmp(argv[pi], "--freq")) {
+		} else if (!strcmp(argv[pi], "-f") || !strcmp(argv[pi], "--freq")) {
 			if (pi < argc-1) {
 				f_cpu = atoi(argv[++pi]);
 				f.frequency = f_cpu;
 			} else {
 				display_usage(basename(argv[0]));
 			}
-		} else if (!strcmp(argv[pi], "-i") ||
-                           !strcmp(argv[pi], "--input")) {
+		} else if (!strcmp(argv[pi], "-i") || !strcmp(argv[pi], "--input")) {
 			if (pi < argc-1)
 				vcd_input = argv[++pi];
 			else
 				display_usage(basename(argv[0]));
-		} else if (!strcmp(argv[pi], "-o") ||
-                           !strcmp(argv[pi], "--output")) {
+		} else if (!strcmp(argv[pi], "-o") || !strcmp(argv[pi], "--output")) {
 			if (pi + 1 >= argc) {
-				fprintf(
-                                    stderr,
-                                    "%s: missing mandatory argument for %s.\n",
-                                    argv[0], argv[pi]);
+				fprintf(stderr, "%s: missing mandatory argument for %s.\n",
+						argv[0], argv[pi]);
 				exit(1);
 			}
-			snprintf(f.tracename, sizeof(f.tracename),
-				 "%s", argv[++pi]);
-		} else if (!strcmp(argv[pi], "-t") ||
-                           !strcmp(argv[pi], "--trace")) {
+			snprintf(f.tracename, sizeof(f.tracename), "%s", argv[++pi]);
+		} else if (!strcmp(argv[pi], "-t") || !strcmp(argv[pi], "--trace")) {
 #ifdef CONFIG_SIMAVR_TRACE
 			trace++;
 #else
-                        fprintf(stderr,
-                                "%s: tracing option '%s' requires "
-                                "compilation option CONFIG_SIMAVR_TRACE.\n",
-                                argv[0], argv[pi]);
+			fprintf(stderr,
+					"%s: tracing option '%s' requires "
+					"compilation option CONFIG_SIMAVR_TRACE.\n",
+					argv[0], argv[pi]);
 #endif //CONFIG_SIMAVR_TRACE
 		} else if (!strcmp(argv[pi], "-at") ||
-                           !strcmp(argv[pi], "--add-trace")) {
+				   !strcmp(argv[pi], "--add-trace")) {
 			if (pi + 1 >= argc) {
-				fprintf(
-                                    stderr,
-                                    "%s: missing mandatory argument for %s.\n",
-                                    argv[0], argv[pi]);
+				fprintf(stderr, "%s: missing mandatory argument for %s.\n",
+						argv[0], argv[pi]);
 				exit(1);
 			}
 			++pi;
@@ -206,36 +199,30 @@ main(
 				char     name[64];
 			} trace;
 			const int n_args = sscanf(argv[pi],
-                                                  "%63[^=]=%63[^@]"
-                                                  "@0x%hx/0x%hhx",
-                                                  &trace.name[0],
-                                                  &trace.kind[0],
-                                                  &trace.addr,
-                                                  &trace.mask);
+									  "%63[^=]=%63[^@]@0x%hx/0x%hhx",
+									  &trace.name[0],
+									  &trace.kind[0],
+									  &trace.addr,
+									  &trace.mask);
 			if (n_args != 4) {
 				--pi;
 				fprintf(stderr,
-                                        "%s: format for %s is name=kind"
-                                        "@addr/mask.\n",
-                                        argv[0], argv[pi]);
+						"%s: format for %s is name=kind@addr/mask.\n",
+						argv[0], argv[pi]);
 				exit(1);
 			}
 
 			/****/ if (!strcmp(trace.kind, "portpin")) {
-				f.trace[f.tracecount].kind =
-                                        AVR_MMCU_TAG_VCD_PORTPIN;
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_PORTPIN;
 			} else if (!strcmp(trace.kind, "irq")) {
-				f.trace[f.tracecount].kind =
-                                        AVR_MMCU_TAG_VCD_IRQ;
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_IRQ;
 			} else if (!strcmp(trace.kind, "trace")) {
-				f.trace[f.tracecount].kind =
-                                        AVR_MMCU_TAG_VCD_TRACE;
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_TRACE;
 			} else {
 				fprintf(stderr,
-					"%s: unknown trace kind '%s', "
-                                        "not one of 'portpin', 'irq', "
-                                        "or 'trace'.\n",
-                                        argv[0], trace.kind);
+						"%s: unknown trace kind '%s', "
+						"not one of 'portpin', 'irq', or 'trace'.\n",
+						argv[0], trace.kind);
 				exit(1);
 			}
 			f.trace[f.tracecount].mask = trace.mask;
@@ -243,38 +230,34 @@ main(
 			strncpy(f.trace[f.tracecount].name, trace.name,
                                 sizeof(f.trace[f.tracecount].name));
 
-			printf("Adding %s trace on address 0x%04x, "
-                                "mask 0x%02x ('%s')\n",
-                                (f.trace[f.tracecount].kind ==
-                                 AVR_MMCU_TAG_VCD_PORTPIN) ? "portpin" :
-				(f.trace[f.tracecount].kind ==
-                                 AVR_MMCU_TAG_VCD_IRQ)     ? "irq" :
-				(f.trace[f.tracecount].kind ==
-                                 AVR_MMCU_TAG_VCD_TRACE)   ? "trace" :
-				                              "unknown",
-				f.trace[f.tracecount].addr,
-				f.trace[f.tracecount].mask,
-				f.trace[f.tracecount].name);
+			printf("Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
+				   (f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN) ?
+					   "portpin" :
+					   (f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ) ?
+						   "irq" :
+						   (f.trace[f.tracecount].kind ==
+                                 AVR_MMCU_TAG_VCD_TRACE) ?
+							   "trace" : "unknown",
+				   f.trace[f.tracecount].addr,
+				   f.trace[f.tracecount].mask,
+				   f.trace[f.tracecount].name);
 
 			++f.tracecount;
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
-				trace_vectors[trace_vectors_count++] =
-                                        atoi(argv[++pi]);
-		} else if (!strcmp(argv[pi], "-p") ||
-                           !strcmp(argv[pi], "--panel")) {
+				trace_vectors[trace_vectors_count++] = atoi(argv[++pi]);
+		} else if (!strcmp(argv[pi], "-p") || !strcmp(argv[pi], "--panel")) {
 #ifdef CONFIG_PANEL
 			panel = 1;
 #else
-                        fprintf(stderr,
-                                "%s: option '%s' requires "
-                                "compilation option CONFIG_PANEL\n",
-                                argv[0], argv[pi]);
+			fprintf(stderr,
+					"%s: option '%s' requires "
+					"compilation option CONFIG_PANEL\n",
+					argv[0], argv[pi]);
 #endif // CONFIG_PANEL
-		} else if (!strcmp(argv[pi], "-g") ||
-                           !strcmp(argv[pi], "--gdb")) {
+		} else if (!strcmp(argv[pi], "-g") || !strcmp(argv[pi], "--gdb")) {
 			gdb++;
-			if (pi < (argc-2) && argv[pi+1][0] != '-' )
+			if (pi < (argc-2) && argv[pi+1][0] != '-')
 				port = atoi(argv[++pi]);
 		} else if (!strcmp(argv[pi], "-v")) {
 			log++;
@@ -284,7 +267,7 @@ main(
 			loadBase = AVR_SEGMENT_OFFSET_FLASH;
 		} else if (argv[pi][0] != '-') {
 			firmware = argv[pi];
-			avr_setup_firmware(firmware, loadBase, &f, argv[0]);
+			sim_setup_firmware(firmware, loadBase, &f, argv[0]);
 		}
 	}
 
@@ -304,7 +287,7 @@ main(
 	}
 	avr_init(avr);
         if (list_irqs)
-                list_all_irqs(f.mmcu);        // Does not return.
+			list_all_irqs(f.mmcu);        // Does not return.
 	avr->log = (log > LOG_TRACE ? LOG_TRACE : log);
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace = trace;
@@ -313,22 +296,21 @@ main(
 	avr_load_firmware(avr, &f);
 	if (f.flashbase) {
 		printf("Attempted to load a bootloader at %04x\n",
-                       f.flashbase);
+			   f.flashbase);
 		avr->pc = f.flashbase;
 	}
 	for (int ti = 0; ti < trace_vectors_count; ti++) {
 		for (int vi = 0; vi < avr->interrupts.vector_count; vi++)
-			if (avr->interrupts.vector[vi]->vector ==
-                            trace_vectors[ti]) {
+			if (avr->interrupts.vector[vi]->vector == trace_vectors[ti])
 				avr->interrupts.vector[vi]->trace = 1;
-                        }
 	}
 	if (vcd_input) {
 		static avr_vcd_t input;
+
 		if (avr_vcd_init_input(avr, vcd_input, &input)) {
 			fprintf(stderr,
-                                "%s: Warning: VCD input file %s failed\n",
-                                argv[0], vcd_input);
+					"%s: Warning: VCD input file %s failed\n",
+					argv[0], vcd_input);
 			vcd_input = NULL;
 		}
 	}
@@ -345,21 +327,20 @@ main(
 	signal(SIGTERM, sig_int);
 
 #ifdef CONFIG_PANEL
-        if (panel) {
-                // Panel has its own run loop.
+	if (panel) {
+		// Panel has its own run loop.
 
-                if (!Run_with_panel(avr, &f, firmware, vcd_input != NULL))
-                        fprintf(stderr, "%s: Failed: Could not show panel.\n",
-                                argv[0]);
+		if (!Run_with_panel(avr, &f, firmware, vcd_input != NULL))
+			fprintf(stderr, "%s: Failed: Could not show panel.\n", argv[0]);
         } else {
 #else
 	{
 #endif // CONFIG_PANEL
-                for (;;) {
-                        int state = avr_run(avr);
-                        if (state == cpu_Done || state == cpu_Crashed)
-                                break;
-                }
+		for (;;) {
+			int state = avr_run(avr);
+			if (state == cpu_Done || state == cpu_Crashed)
+				break;
+		}
 	}
 	avr_terminate(avr);
 }
