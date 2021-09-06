@@ -267,7 +267,7 @@ After building from source, the library can be found in a directory
 and OS, and the headers are in <I>simavr/simavr/sim.</I>
 
 <H5>Initialisation.</H5>
-The first step is developing a program that uses <I>libsimavr</I>
+The first step in developing a program that uses <I>libsimavr</I>
 is to create an instance of a simulated MCU and load the firmware.
 Then it needs to be connected to some kind of external circuit simulation
 and code to start and possibly control execution.
@@ -288,7 +288,7 @@ the first step is to read the file:
 The procedure for a HEX file is slightly more complicated.
 The code can be found in run_avr.c, or in the gatk555 fork
 there is a function
-<I>avr_setup_firmware()</I>
+<I>sim_setup_firmware()</I>
 declared in
 <I>simavr/simavr/sim/sim_hex.h</I>
 that handles both file formats.
@@ -333,14 +333,15 @@ In most cases this will use the digital input and output functions
 of the AVR general-purpose I/O ports (GIOPs).
 Some internal peripheral simulations route through the GIOP simulation,
 so external code does not need to consider what goes on inside,
-others are handled through their own interfaces.
+while others are handled through their own interfaces.
+<P>
 External code interacts with simavr through function calls labelled "IRQ",
 described in <I>simavr/simavr/sim/sim_irq.h.</I>)
 Pointers to structures
 (<I>struct avr_irq_t</I>)
 serve as "handles" to events and operations within the simulator.
-Each peripheral, including the 8-bit GPIO ports has a list of IRQs
-that it publishes and
+Each peripheral, including the 8-bit GPIO ports,
+has a list of IRQs that it publishes and
 the first step in connecting code to the simulation is to obtain an
 IRQ pointer.
 This is how to get access to output on the 8 PORTB pins of an AVR:
@@ -438,7 +439,7 @@ each peripheral IRQ includes its own selector value
 (<I>irq->irq;</I>)
 and the IRQs for any one peripheral form an array
 (there are some exceptions),
-so it is really only necessary for call
+so it is really only necessary to call
 <I>avr_io_getirq()</I>
 once for each peripheral used.
 (Another useful feature is that the IRQ structure contains the value passed
