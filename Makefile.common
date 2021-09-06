@@ -220,10 +220,12 @@ endif
 ${OBJ}/%.so: ${OBJ}/%.so.1
 	ln -sf ${notdir $<} $@
 
+.PHONY: obj ${OBJ}
+
 obj: ${OBJ}
 
 ${OBJ}:
-	${E}mkdir -p ${OBJ}
+	${E}-mkdir -p ${OBJ}
 
 clean-${OBJ}:
 	rm -rf ${OBJ}
