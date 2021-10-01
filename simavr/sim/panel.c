@@ -45,14 +45,14 @@ static avr_t *The_avr;  // Ugly
 
 /* Data structures to track the simulated MCU's I/O ports. */
 
-#define HANDLES_PER_PORT 2
+#define HANDLES_PER_PORT 3
 
 struct port {
     avr_t       *avr;
     avr_irq_t   *base_irq;
     char         port_letter, vcd_letter;
     uint8_t      output, ddr, actual;
-    uint8_t      sor;                                   // Stop indicator.
+    uint8_t      sor, sow;                              // Stop indicators.
     struct port *handle_finder[HANDLES_PER_PORT];       // See push_val().
 };
 
@@ -89,6 +89,7 @@ static char         ADC_vcd_letter;
 #define PORT_HANDLE(pp, i) (pp->handle_finder + i)
 
 #define SOR     1       // Stop on read
+#define SOW     2       // Stop on write
 
 /* Handles for non-port Blink items. */
 
@@ -233,6 +234,8 @@ static void d_out_notify(avr_irq_t *irq, uint32_t value, void *param)
     }
     pp->actual = (out & ddr) | (pp->actual & ~ddr);
     Bfp->new_value(PORT_HANDLE(pp, 0), pp->actual);
+    if (pp->sow)
+        stop_on_event(pp->avr, PORT_HANDLE(pp, SOW));
 }
 
 /* Notification of a pin change.  Used to display VCD input, but will
@@ -441,6 +444,11 @@ static int push_val(Sim_RH handle, unsigned int value)
             pp->sor = 0;
         }
         break;
+    case SOW:
+        /* Stop on write. */
+
+        pp->sow = value;
+        break;
     }
     Blink_input_active = 0;
     return 0;
@@ -569,6 +577,7 @@ static void port_reg(char port_letter, struct port *pp)
     row = Bfp->new_row(name_buff);
     Bfp->add_register(name_buff, PORT_HANDLE(pp, 0), 8,
                       RO_SENSITIVITY | RO_ALT_COLOURS, row);
+    Bfp->add_register("SoW", PORT_HANDLE(pp, SOW), 1, RO_ALT_COLOURS, row);
     Bfp->add_register("SoR", PORT_HANDLE(pp, SOR), 1, RO_ALT_COLOURS, row);
     Bfp->close_row(row);
     Bfp->new_flags(PORT_HANDLE(pp, 0), 0xff);  /* All inputs - inverted. */
