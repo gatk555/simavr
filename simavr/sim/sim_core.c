@@ -646,7 +646,16 @@ static inline int _avr_is_instruction_32_bits(avr_t * avr, avr_flashaddr_t pc)
  */
 avr_flashaddr_t avr_run_one(avr_t * avr)
 {
-run_one_again:
+	/* Mop-up any outstanding timer events first.
+	 * The next call to avr_cycle_timer_process() should clean up.
+	 */
+
+	if (avr->cycle_timers.timer &&
+		avr->cycle_timers.timer->when <= avr->cycle) {
+		return avr->pc;
+	}
+
+ run_one_again:
 #if CONFIG_SIMAVR_TRACE
 	/*
 	 * this traces spurious reset or bad jumps

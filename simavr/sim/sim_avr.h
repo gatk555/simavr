@@ -197,6 +197,12 @@ typedef struct avr_t {
 	// like, sleeping.
 	avr_cycle_count_t	cycle;		// current cycle
 
+        // This is set from the 'when' argument of any cycle timer that makes
+        // an externally-visible change, so that the actual event time is
+        // available.  Output only, so may be reset by user.
+
+        avr_cycle_count_t       timer_cycle;
+
 	// these next two allow the core to freely run between cycle timers and also allows
 	// for a maximum run cycle limit... run_cycle_count is set during cycle timer processing.
 	avr_cycle_count_t	run_cycle_count;	// cycles to run before next timer

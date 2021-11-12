@@ -217,30 +217,50 @@ avr_cycle_timer_process(
 		avr_t * avr)
 {
 	avr_cycle_timer_pool_t * pool = &avr->cycle_timers;
+	avr_cycle_count_t        first;
 
-	if (pool->timer) do {
+	if (pool->timer) {
 		avr_cycle_timer_slot_p t = pool->timer;
-		avr_cycle_count_t when = t->when;
 
-		if (when > avr->cycle)
-			return avr_cycle_timer_return_sleep_run_cycles_limited(avr, when - avr->cycle);
-
-		// detach from active timers
-		pool->timer = t->next;
-		t->next = NULL;
+		first = t->when;
 		do {
+			avr_cycle_count_t when = t->when;
+
+			if (when > avr->cycle) {
+				return avr_cycle_timer_return_sleep_run_cycles_limited(
+						   avr, when - avr->cycle);
+			}
+			if (when > first) {
+				/* Stop here.  Simulated execution may be some cycles ahead,
+				 * but give the caller the chance to catch up before
+				 * processing more timer events.
+				 */
+
+#if 0
+				printf("Timer anomaly: %lu/%lu/%lu\n",
+					   first, when, avr->cycle);
+#endif
+				return 0;
+			}
+
+			// Detach from active timers and call.
+
+			pool->timer = t->next;
+			t->next = NULL;
 			avr_cycle_count_t w = t->timer(avr, when, t->param);
-			// make sure the return value is either zero, or greater
-			// than the last one to prevent infinite loop here
+
+			// Make sure the return value is either zero, or greater
+			// than the last one to prevent infinite loop.
+
 			when = w > when ? w : 0;
-		} while (when && when <= avr->cycle);
+			if (when) // reschedule then
+				avr_cycle_timer_insert(avr, when - avr->cycle,
+									   t->timer, t->param);
 		
-		if (when) // reschedule then
-			avr_cycle_timer_insert(avr, when - avr->cycle, t->timer, t->param);
-		
-		// requeue this one into the free ones
-		QUEUE(pool->timer_free, t);
-	} while (pool->timer);
+			// requeue this one into the free ones
+			QUEUE(pool->timer_free, t);
+		} while ((t = pool->timer));
+	}
 
 	// original behavior was to return 1000 cycles when no timers were present...
 	// run_cycles are bound to at least one cycle but no more than requested limit...

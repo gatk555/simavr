@@ -83,18 +83,20 @@ avr_timer_comp(
 	}
 
 	// check output compare mode and set/clear pins
-	uint8_t mode = avr_regbit_get(avr, p->comp[comp].com);
+	uint8_t     mode = avr_regbit_get(avr, p->comp[comp].com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
+    int         have_pin = p->comp[comp].com_pin.reg;	// Physical pin
+	uint32_t    flags = (have_pin) ? AVR_IOPORT_OUTPUT : 0;
 
-		uint32_t flags = 0;
-		if (p->comp[comp].com_pin.reg)	// we got a physical pin
-				flags |= AVR_IOPORT_OUTPUT;
-		AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);
+	AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);
+	if (have_pin && mode != avr_timer_com_normal)
+		avr->timer_cycle = when;	// Record event time.
+
 	switch (mode) {
 		case avr_timer_com_normal: // Normal mode OCnA disconnected
 			break;
 		case avr_timer_com_toggle: // Toggle OCnA on compare match
-			if (p->comp[comp].com_pin.reg)	// we got a physical pin
+			if (have_pin)
 				avr_raise_irq(irq,
 						flags |
 						(avr_regbit_get(avr, p->comp[comp].com_pin) ? 0 : 1));
@@ -124,13 +126,17 @@ avr_timer_comp_on_tov(
 	avr_t * avr = p->io.avr;
 
 	// check output compare mode and set/clear pins
-	uint8_t mode = avr_regbit_get(avr, p->comp[comp].com);
+	uint8_t     mode = avr_regbit_get(avr, p->comp[comp].com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
+    int         have_pin = p->comp[comp].com_pin.reg;	// Physical pin
 
 	// only PWM modes have special behaviour on overflow
 	if((p->wgm_op_mode_kind != avr_timer_wgm_pwm) &&
 	   (p->wgm_op_mode_kind != avr_timer_wgm_fast_pwm))
 		return;
+
+	if (have_pin && mode != avr_timer_com_normal)
+		avr->timer_cycle = when;	// Record event time.
 
 	switch (mode) {
 		case avr_timer_com_normal: // Normal mode
@@ -723,7 +729,7 @@ static void avr_timer_write_foc(struct avr_t * avr, avr_io_addr_t addr, uint8_t 
 {
 	avr_timer_t * p = (avr_timer_t *)param;
 
-        /* These are strobe writes, so just decode them, don't store them */
+	/* These are strobe writes, so just decode them, don't store them */
 
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
 		if ((addr == p->comp[compi].foc.reg) &&
