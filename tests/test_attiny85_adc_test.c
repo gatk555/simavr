@@ -87,14 +87,20 @@ int main(int argc, char **argv) {
 	tests_init(argc, argv);
         avr = tests_init_avr("attiny85_adc_test.axf");
 
-	/* Test the pin information ioctl. */
+	/* Test the pin information ioctls. */
 
 	pip = (const avr_pin_info_t *)0;
 	if (avr_ioctl(avr, AVR_IOCTL_ADC_GETPINS, &pip) < 0 || !pip ||
-	    pip[-1].port_letter != 'B' || pip[-1].pin != 0 ||
 	    pip[4].port_letter ||
 	    pip[2].port_letter != 'B' || pip[2].pin != 4) {
 		fail("AVR_IOCTL_ADC_GETPINS failed.\n");
+	}
+
+	pip = (const avr_pin_info_t *)0;
+	if (avr_ioctl(avr, AVR_IOCTL_COMMON_GETPINS, &pip) < 0 || !pip ||
+	    pip[1].port_letter ||
+	    pip[0].port_letter != 'B' || pip[0].pin != 0) {
+		fail("AVR_IOCTL_COMMON_GETPINS failed.\n");
 	}
 
 
