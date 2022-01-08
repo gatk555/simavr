@@ -13,8 +13,8 @@ int main(int argc, char **argv) {
 
 	// Set AREF to 2200mV, overriding ELF pre-set.
 
-	avr_raise_irq(avr_io_getirq(avr, AVR_IOCTL_CPU_GETIRQ, CPU_IRQ_AREF),
-		      2200);
+	avr_raise_irq(avr_io_getirq(avr, AVR_IOCTL_COMMON_GETIRQ, COMMON_IRQ_AREF),
+				  2200);
 
 	tests_assert_uart_receive_avr(avr, 10000000, expected, '0');
 	tests_success();
