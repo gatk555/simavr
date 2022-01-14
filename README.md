@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (July 2021) this fork contains some new or updated items.
+At the time of writing (January 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -48,7 +48,7 @@ You are assumed to be familiar with downloading and building
 open-source software.
 If not, specific instructions for
 <I>simavr</I>
-can be found in the PDF manual.
+can be found in the PDF manual or the Bulid Guide page of the github Wiki.
 Before you start you will need the ELF library,
 <I>libelf</I>
 and an AVR toolchain (programs for building AVR programs).
@@ -67,9 +67,9 @@ that can load and run AVR programs (firmware).
 You also have the simulator built as a library
 that can be combined with your own software
 in a more complete circuit simulation.
-This guide is mostly an introduction to the library.
 The tree also contains some examples of using the library
 and some tests to verify that simavr is working properly.
+This guide is mostly an introduction to the library.
 
 <H4>Using <I>run-avr</I>.</H4>
 An easy way to get your firmware compiled and running
@@ -144,7 +144,7 @@ The simulator has support for debugging firmware with the AVR version
 of the GNU debugger,
 <I>avr-gdb.</I>
 Simply run
-<I>simavr</I>
+<I>run_avr</I>
 as usual, with the extra option
 <I>--gdb</I>
 and put the process in the background.
@@ -236,6 +236,7 @@ The button changes from red to green when the halt occurs.
 A new input value can then be entered and execution continued.
 Use the Enter key after entering new ADC inputs,
 otherwise they are visible but not sent.
+The GPIO ports now also have "SoW" (Stop-on-Write) buttons that work similarly.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file
@@ -532,7 +533,7 @@ ACOMP_IRQ_OUT offers notification of changes to the comparator's output bit.
 <H5>Other peripherals.</H5>
 It might seem that the IRQs mentioned above are all that are needed,
 as all the chip functions visible to external circuits use an I/O pin.
-That is true for the timers; their externally-visible function
+That is true for the timers; their externally-visible functions
 are routed through the GPIO ports.
 <P>
 The serial communication peripherals (UART, SPI, TWI) are different,
