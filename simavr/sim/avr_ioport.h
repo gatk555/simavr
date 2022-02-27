@@ -72,6 +72,7 @@ typedef struct avr_ioport_state_t {
 // add port name (uppercase) to get the port state
 #define AVR_IOCTL_IOPORT_GETSTATE(_name) AVR_IOCTL_DEF('i','o','s',(_name))
 
+#ifdef CONFIG_PULL_UPS
 /*
  * ioctl used to set default port state when set as input.
  *
@@ -83,6 +84,7 @@ typedef struct avr_ioport_external_t {
 
 // add port name (uppercase) to set default input pin IRQ values
 #define AVR_IOCTL_IOPORT_SET_EXTERNAL(_name) AVR_IOCTL_DEF('i','o','p',(_name))
+#endif
 
 /**
  * pin structure
@@ -112,6 +114,7 @@ typedef struct avr_ioport_t {
 	uint8_t 	mask;
 	int8_t 		shift;
 
+#ifdef CONFIG_PULL_UPS
 	// This represent the default IRQ value when
 	// the port is set as input.
 	// If the mask is not set, no output value is sent
@@ -120,6 +123,7 @@ typedef struct avr_ioport_t {
 	struct {
 		uint8_t pull_mask, pull_value;
 	} external;
+#endif
 } avr_ioport_t;
 
 void avr_ioport_init(avr_t * avr, avr_ioport_t * port);

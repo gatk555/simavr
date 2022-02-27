@@ -43,6 +43,10 @@ CFLAGS		+= -O2 -Wall -Wextra -Wno-unused-parameter \
 			-Wno-unused-result -Wno-missing-field-initializers \
 			-Wno-sign-compare
 CFLAGS		+= -g
+# Add feature defines that are also used throughout.
+
+CFLAGS	+= -DCONFIG_PULL_UPS=1
+
 CORE_CFLAGS	= -DAVR_CORE=1
 
 ifeq (${shell uname}, Darwin)

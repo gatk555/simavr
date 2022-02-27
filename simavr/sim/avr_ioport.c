@@ -70,13 +70,17 @@ avr_ioport_update_irqs(
 	for (int i = 0; i < 8; i++) {
 		if (ddr & (1 << i))
 			avr_raise_irq(p->io.irq + i, (avr->data[p->r_port] >> i) & 1);
+#ifdef CONFIG_PULL_UPS
 		else if (p->external.pull_mask & (1 << i))
 			avr_raise_irq(p->io.irq + i, (p->external.pull_value >> i) & 1);
 		else if ((avr->data[p->r_port] >> i) & 1)
 			avr_raise_irq(p->io.irq + i, 1);
+#endif
 	}
 	uint8_t pin = (avr->data[p->r_pin] & ~ddr) | (avr->data[p->r_port] & ddr);
+#ifdef CONFIG_PULL_UPS
 	pin = (pin & ~p->external.pull_mask) | p->external.pull_value;
+#endif
 	avr_raise_irq(p->io.irq + IOPORT_IRQ_PIN_ALL, pin);
 
 	// if IRQs are registered on the PORT register (for example, VCD dumps) send
@@ -270,6 +274,7 @@ avr_ioport_ioctl(
 					*((avr_ioport_state_t*)io_param) = state;
 				res = 0;
 			}
+#ifdef CONFIG_PULL_UPS
 			/*
 			 * Set the default IRQ values when pin is set as input
 			 */
@@ -279,6 +284,7 @@ avr_ioport_ioctl(
 				p->external.pull_value = m->value;
 				res = 0;
 			}
+#endif
 		}
 	}
 

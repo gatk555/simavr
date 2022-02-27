@@ -170,6 +170,7 @@ avr_load_firmware(
 		memcpy(avr->fuse, firmware->fuse, firmware->fusesize);
 	if (firmware->lockbits)
 		avr->lockbits = firmware->lockbits[0];
+#ifdef CONFIG_PULL_UPS
 	// load the default pull up/down values for ports
 	for (int i = 0; i < 8 && firmware->external_state[i].port; i++) {
 		avr_ioport_external_t e = {
@@ -179,6 +180,7 @@ avr_load_firmware(
 		};
 		avr_ioctl(avr, AVR_IOCTL_IOPORT_SET_EXTERNAL(e.name), &e);
 	}
+#endif
 	avr_set_command_register(avr, firmware->command_register_addr);
 	avr_set_console_register(avr, firmware->console_register_addr);
 
@@ -299,6 +301,7 @@ elf_parse_mmcu_section(
 				firmware->aref =
 					src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
 				break;
+#ifdef CONFIG_PULL_UPS
 			case AVR_MMCU_TAG_PORT_EXTERNAL_PULL: {
 				for (int i = 0; i < 8; i++)
 					if (!firmware->external_state[i].port) {
@@ -315,6 +318,7 @@ elf_parse_mmcu_section(
 						break;
 					}
 			}	break;
+#endif
 			case AVR_MMCU_TAG_VCD_PORTPIN:
 			case AVR_MMCU_TAG_VCD_IRQ:
 			case AVR_MMCU_TAG_VCD_TRACE: {

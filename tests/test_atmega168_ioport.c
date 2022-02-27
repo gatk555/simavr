@@ -92,15 +92,25 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 /* This string should be sent by the firmware. */
 
 static const char *expected =
+#ifdef CONFIG_PULL_UPS
     "P<2A P<70 F<01 I<E0 P<E0 J<03 J<00 P<E8 | K | ";
+#else
+    "P<2A P<30 F<01 I<20 P<20 J<03 J<00 P<28 | K | ";
+#endif
 
 /* This string is expected in variable log. */
 
 static const char *log_expected =
-    "d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 P-F0 "
-    "I-70 "                                     // Interrupts off testing.
+    "d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 "
+#ifdef CONFIG_PULL_UPS
+    "P-F0 I-70 "                                // Interrupts off testing.
     "o-E0 P-E0 I-E0 I-E0 "                      // External interrupt test.
     "d-03 o-01 P-E1 o-03 P-E3 o-00 P-E8 I-E8 "; // Pin change interrupt test.
+#else
+    "P-30 I-30 "                                // Interrupts off testing.
+    "o-E0 P-20 I-20 I-20 "                      // External interrupt test.
+    "d-03 o-01 P-21 o-03 P-23 o-00 P-28 I-28 "; // Pin change interrupt test.
+#endif
 
 
 int main(int argc, char **argv) {
