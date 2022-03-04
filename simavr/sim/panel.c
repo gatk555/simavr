@@ -680,14 +680,14 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
             pp->port_letter = port_letter;
             for (i = 0; i < HANDLES_PER_PORT; ++i)      // See push_val().
                 pp->handle_finder[i] = pp;
+#if 0
             avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PORT,
                                     d_out_notify, pp);
+#endif
             avr_irq_register_notify(base_irq + IOPORT_IRQ_DIRECTION_ALL,
                                     d_out_notify, pp);
-#if 0
             avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN_ALL,
-                                    d_in_notify, pp);
-#endif
+                                    d_out_notify, pp);
 
             /* Display the port and DDR for now. */
 
