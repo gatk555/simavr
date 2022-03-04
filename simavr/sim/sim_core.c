@@ -691,6 +691,9 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 	 */
 	if (unlikely(avr->pc >= avr->flashend)) {
 		STATE("CRASH\n");
+		AVR_LOG(avr, LOG_ERROR, FONT_RED
+				"avr->pc >= avr->flashend\n"
+				FONT_DEFAULT);
 		crash(avr);
 		return 0;
 	}
