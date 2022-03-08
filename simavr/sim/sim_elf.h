@@ -56,10 +56,12 @@ typedef struct elf_firmware_t {
 		char	name[64];
 	} trace[32];
 
+#ifdef CONFIG_PULL_UPS
 	struct {
 		char port;
 		uint8_t mask, value;
 	} external_state[8];
+#endif
 
 	// register to listen to for commands from the firmware
 	uint16_t	command_register_addr;

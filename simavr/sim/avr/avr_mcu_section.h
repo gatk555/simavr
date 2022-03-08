@@ -62,7 +62,9 @@ enum {
 	AVR_MMCU_TAG_VCD_TRACE,
 	AVR_MMCU_TAG_VCD_PORTPIN,
 	AVR_MMCU_TAG_VCD_IRQ,
+#ifdef CONFIG_PULL_UPS
 	AVR_MMCU_TAG_PORT_EXTERNAL_PULL,
+#endif
 };
 
 enum {
@@ -185,6 +187,7 @@ struct avr_mmcu_vcd_trace_t {
 		.len = sizeof(void *),\
 		.what = (void*)_register, \
 	}
+#ifdef CONFIG_PULL_UPS
 /*!
  * Allows the firmware to hint simavr as to wether there are external
  * pullups/down on PORT pins. It helps if the firmware uses "open drain"
@@ -198,6 +201,7 @@ struct avr_mmcu_vcd_trace_t {
 		(((unsigned long)((_port)&0xff) << 16) | \
 		((unsigned long)((_mask)&0xff) << 8) | \
 		((_val)&0xff)));
+#endif
 /*!
  * Add this port/pin to the VCD file. The syntax uses the name of the
  * port as a character, and not a pointer to a register.

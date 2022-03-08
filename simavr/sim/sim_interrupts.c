@@ -197,6 +197,7 @@ avr_raise_interrupt(
 					vec_num);
 			avr->state = cpu_Running;
 		}
+if (vector->trace) printf("IRQ%u enabled %d state %d pending %u next %u\n", vec_num, avr->sreg[S_I], avr->interrupt_state, (unsigned)table->pending_count, (unsigned)table->next_vector);
 	}
 	return 1;
 }
@@ -350,7 +351,8 @@ avr_service_interrupts(
 	    (!vp->level &&
 	     (vp->raised.reg && !avr_regbit_get(avr, vp->raised))) ||
 	    !vp->pending) {
-		fprintf(stderr, "Internal error: interrupt flags: %d/%d/%d\n",
+		fprintf(stderr, "Internal error: %p interrupt flags: %d/%d/%d\n",
+vp,
 			avr_regbit_get(avr, vp->enable),
 			avr_regbit_get(avr, vp->raised),
 			vp->pending);

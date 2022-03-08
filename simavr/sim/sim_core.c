@@ -144,6 +144,20 @@ _avr_flash_read16le(
 	return(avr->flash[addr] | (avr->flash[addr + 1] << 8));
 }
 
+static inline void _call_register_irqs(avr_t * avr, uint16_t addr)
+{
+	if (addr > 31 && addr < 31 + MAX_IOs) {
+		avr_io_addr_t io = AVR_DATA_TO_IO(addr);
+
+		if (avr->io[io].irq) {
+			uint8_t v = avr->data[addr];
+			avr_raise_irq(avr->io[io].irq + AVR_IOMEM_IRQ_ALL, v);
+			for (int i = 0; i < 8; i++)
+				avr_raise_irq(avr->io[io].irq + i, (v >> i) & 1);
+		}
+	}
+}
+
 void avr_core_watch_write(avr_t *avr, uint16_t addr, uint8_t v)
 {
 	if (addr > avr->ramend) {
@@ -179,6 +193,7 @@ void avr_core_watch_write(avr_t *avr, uint16_t addr, uint8_t v)
 	}
 
 	avr->data[addr] = v;
+	_call_register_irqs(avr, addr);
 }
 
 uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
@@ -197,6 +212,7 @@ uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 	}
         /* FIX add reading mappped Flash. */
 
+//	_call_register_irqs(avr, addr);
 	return avr->data[addr];
 }
 
@@ -206,9 +222,29 @@ uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 
 static inline void _avr_set_r(avr_t * avr, uint16_t r, uint8_t v)
 {
-if (r > 31) fprintf(stderr, "Register > 31 in _avr_set_r: %#x\n", r), abort();
+	if (r > 31) fprintf(stderr, "Register > 31 in _avr_set_r: %#x\n", r), abort();
 	REG_TOUCH(avr, r);
-	avr->base[r] = v;
+
+	if (r == R_SREG) {
+		avr->data[R_SREG] = v;
+		// unsplit the SREG
+		SET_SREG_FROM(avr, v);
+		SREG();
+	}
+	if (r > 31) {
+		avr_io_addr_t io = AVR_DATA_TO_IO(r);
+		if (avr->io[io].w.c) {
+			avr->io[io].w.c(avr, r, v, avr->io[io].w.param);
+		} else {
+			avr->data[r] = v;
+			if (avr->io[io].irq) {
+				avr_raise_irq(avr->io[io].irq + AVR_IOMEM_IRQ_ALL, v);
+				for (int i = 0; i < 8; i++)
+					avr_raise_irq(avr->io[io].irq + i, (v >> i) & 1);
+			}
+		}
+	} else
+		avr->data[r] = v;
 }
 
 // These are used only for CPU registers.
@@ -303,21 +339,13 @@ static inline uint8_t _avr_get_ram(avr_t * avr, uint16_t addr)
 		 * SREG is special it's reconstructed when read
 		 * while the core itself uses the "shortcut" array
 		 */
-		READ_SREG_INTO(avr, avr->iobase[R_SREG]);
+		READ_SREG_INTO(avr, avr->data[R_SREG]);
 
 	} else if (addr >= avr->io_offset && io_addr < MAX_IOs) {
-		if (avr->io[io_addr].r.c)
-			avr->data[addr] =
-				avr->io[io_addr].r.c(avr, addr,
-						     avr->io[io_addr].r.param);
-		if (avr->io[io_addr].irq) {
-			uint8_t v = avr->data[addr];
-			avr_raise_irq(avr->io[io_addr].irq + AVR_IOMEM_IRQ_ALL,
-				      v);
-			for (int i = 0; i < 8; i++)
-				avr_raise_irq(avr->io[io_addr].irq + i,
-					      (v >> i) & 1);
-		}
+		avr_io_addr_t io = AVR_DATA_TO_IO(addr);
+
+		if (avr->io[io].r.c)
+			avr->data[addr] = avr->io[io].r.c(avr, addr, avr->io[io].r.param);
 	}
 	return avr_core_watch_read(avr, addr);
 }
@@ -396,7 +424,7 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 
 // Argument is an IO register's RAM address.
 
-#define AVR_REGNAME_IO(reg) avr_regname(avr, (reg) + avr->io_offset ? 0 : 32)
+#define AVR_REGNAME_IO(reg) avr_regname(avr, (reg) + (avr->io_offset) ? 0 : 32)
 
 /*
  * Called when an invalid opcode is decoded
@@ -676,7 +704,16 @@ static inline int _avr_is_instruction_32_bits(avr_t * avr, avr_flashaddr_t pc)
  */
 avr_flashaddr_t avr_run_one(avr_t * avr)
 {
-run_one_again:
+	/* Mop-up any outstanding timer events first.
+	 * The next call to avr_cycle_timer_process() should clean up.
+	 */
+
+	if (avr->cycle_timers.timer &&
+		avr->cycle_timers.timer->when <= avr->cycle) {
+		return avr->pc;
+	}
+
+ run_one_again:
 #if CONFIG_SIMAVR_TRACE
 	/*
 	 * this traces spurious reset or bad jumps
@@ -694,6 +731,9 @@ run_one_again:
 	 */
 	if (unlikely(avr->pc >= avr->flashend)) {
 		STATE("CRASH\n");
+		AVR_LOG(avr, LOG_ERROR, FONT_RED
+				"avr->pc >= avr->flashend\n"
+				FONT_DEFAULT);
 		crash(avr);
 		return 0;
 	}
@@ -1042,6 +1082,7 @@ run_one_again:
 					new_pc = _avr_pop_addr(avr);
 					cycle += 1 + avr->address_size;
 					STATE("ret%s\n", opcode & 0x10 ? "i" : "");
+SREG();
 					TRACE_JUMP();
 					STACK_FRAME_POP();
 				}	break;
@@ -1403,7 +1444,8 @@ run_one_again:
 			switch (opcode & 0xf800) {
 				case 0xb800: {	// OUT A,Rr -- 1011 1AAd dddd AAAA
 					get_d5_a6(opcode);
-					STATE("out %s, %s[%02x]\n", AVR_REGNAME_IO(A), AVR_REGNAME(d), avr->base[d]);
+//					STATE("out %s, %s[%02x]\n", AVR_REGNAME_IO(A), AVR_REGNAME(d), avr->base[d]);
+					STATE("out %s(%02x), %s[%02x]\n", AVR_REGNAME_IO(A), A, AVR_REGNAME(d), avr->base[d]);
 					_avr_set_ram(avr, A, avr->base[d]);
 				}	break;
 				case 0xb000: {	// IN Rd,A -- 1011 0AAd dddd AAAA

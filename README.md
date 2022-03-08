@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (May 2021) this fork contains some new or updated items.
+At the time of writing (January 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -11,7 +11,7 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
-+ Some Pull Requests that are not yet integrated upstream are included.
++ Some Pull Requests that are not yet integrated upstream may be included.
 + Miscellaneous bug fixes.
 
 There is an additional library dependency, libdwarf, that extracts
@@ -48,7 +48,7 @@ You are assumed to be familiar with downloading and building
 open-source software.
 If not, specific instructions for
 <I>simavr</I>
-can be found in the PDF manual.
+can be found in the PDF manual or the Bulid Guide page of the github Wiki.
 Before you start you will need the ELF library,
 <I>libelf</I>
 and an AVR toolchain (programs for building AVR programs).
@@ -67,9 +67,9 @@ that can load and run AVR programs (firmware).
 You also have the simulator built as a library
 that can be combined with your own software
 in a more complete circuit simulation.
-This guide is mostly an introduction to the library.
 The tree also contains some examples of using the library
 and some tests to verify that simavr is working properly.
+This guide is mostly an introduction to the library.
 
 <H4>Using <I>run-avr</I>.</H4>
 An easy way to get your firmware compiled and running
@@ -83,14 +83,14 @@ identifies the target AVR part
 and is used to select the appropriate compiler options.
 If your new directory has a name beginning "board_",
 the Makefile will be called by those higher in the directory tree.
-The execute your firmware, invoke
+To execute your firmware, invoke
 <I>run-avr</I>
 with the compiled firmware as the only non-option argument.
 <P>
 While your firmware is running,
 <I>run-avr</I>
 can show the instructions being executed, using the
-<I>"-trace"</I>
+<I>"--trace"</I>
 option, and can also trace actions in the peripherals.
 These tracing options are disabled by default and are enabled by modifying
 <I>simavr/Makefile</I> to turn on CONFIG_SIMAVR_TRACE and recompiling.
@@ -144,7 +144,7 @@ The simulator has support for debugging firmware with the AVR version
 of the GNU debugger,
 <I>avr-gdb.</I>
 Simply run
-<I>simavr</I>
+<I>run_avr</I>
 as usual, with the extra option
 <I>--gdb</I>
 and put the process in the background.
@@ -164,7 +164,7 @@ An initial gdb command can be included in the shell command:
 <PRE>
    avr-gdb -ex 'target remote :1234' firmware.elf
 </PRE>
-Gdb has an command,
+Gdb has a command,
 <I>monitor,</I>
 for sending device-specific commands to the device being debugged.
 With
@@ -236,6 +236,7 @@ The button changes from red to green when the halt occurs.
 A new input value can then be entered and execution continued.
 Use the Enter key after entering new ADC inputs,
 otherwise they are visible but not sent.
+The GPIO ports now also have "SoW" (Stop-on-Write) buttons that work similarly.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file
@@ -267,7 +268,7 @@ After building from source, the library can be found in a directory
 and OS, and the headers are in <I>simavr/simavr/sim.</I>
 
 <H5>Initialisation.</H5>
-The first step is developing a program that uses <I>libsimavr</I>
+The first step in developing a program that uses <I>libsimavr</I>
 is to create an instance of a simulated MCU and load the firmware.
 Then it needs to be connected to some kind of external circuit simulation
 and code to start and possibly control execution.
@@ -288,7 +289,7 @@ the first step is to read the file:
 The procedure for a HEX file is slightly more complicated.
 The code can be found in run_avr.c, or in the gatk555 fork
 there is a function
-<I>avr_setup_firmware()</I>
+<I>sim_setup_firmware()</I>
 declared in
 <I>simavr/simavr/sim/sim_hex.h</I>
 that handles both file formats.
@@ -333,14 +334,15 @@ In most cases this will use the digital input and output functions
 of the AVR general-purpose I/O ports (GIOPs).
 Some internal peripheral simulations route through the GIOP simulation,
 so external code does not need to consider what goes on inside,
-others are handled through their own interfaces.
+while others are handled through their own interfaces.
+<P>
 External code interacts with simavr through function calls labelled "IRQ",
 described in <I>simavr/simavr/sim/sim_irq.h.</I>)
 Pointers to structures
 (<I>struct avr_irq_t</I>)
 serve as "handles" to events and operations within the simulator.
-Each peripheral, including the 8-bit GPIO ports has a list of IRQs
-that it publishes and
+Each peripheral, including the 8-bit GPIO ports,
+has a list of IRQs that it publishes and
 the first step in connecting code to the simulation is to obtain an
 IRQ pointer.
 This is how to get access to output on the 8 PORTB pins of an AVR:
@@ -438,7 +440,7 @@ each peripheral IRQ includes its own selector value
 (<I>irq->irq;</I>)
 and the IRQs for any one peripheral form an array
 (there are some exceptions),
-so it is really only necessary for call
+so it is really only necessary to call
 <I>avr_io_getirq()</I>
 once for each peripheral used.
 (Another useful feature is that the IRQ structure contains the value passed
@@ -531,7 +533,7 @@ ACOMP_IRQ_OUT offers notification of changes to the comparator's output bit.
 <H5>Other peripherals.</H5>
 It might seem that the IRQs mentioned above are all that are needed,
 as all the chip functions visible to external circuits use an I/O pin.
-That is true for the timers; their externally-visible function
+That is true for the timers; their externally-visible functions
 are routed through the GPIO ports.
 <P>
 The serial communication peripherals (UART, SPI, TWI) are different,

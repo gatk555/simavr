@@ -233,65 +233,65 @@ void avr_extint_init(avr_t * avr, avr_extint_t * p)
 	p->io = _io;
 	avr_register_io(avr, &p->io);
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-                struct avr_eint_i_t * ip = p->eint + i;
-                int                   j;
+		struct avr_eint_i_t * ip = p->eint + i;
+		int                   j;
 
-                if (!ip->port_ioctl)
-                     break;
-                ip->owner = p;
+		if (!ip->port_ioctl)
+			break;
+		ip->owner = p;
 		avr_register_vector(avr, &ip->vector);
 
-                // Watch enable registers - only once.
+		// Watch enable registers - only once.
 
-                for (j = 0; j < i; j++) {
-                        if (p->eint[j].vector.enable.reg ==
-                            ip->vector.enable.reg) {
-                                // Already registered.
+		for (j = 0; j < i; j++) {
+			if (p->eint[j].vector.enable.reg == ip->vector.enable.reg) {
+				// Already registered.
 
-                                break;
-                        }
-                }
-                if (i == j) {
-                        avr_register_io_write(avr,
-                                              ip->vector.enable.reg,
-                                              avr_exint_enable_change, p);
-                }
+				break;
+			}
+		}
+		if (i == j) {
+			avr_register_io_write(avr,
+								  ip->vector.enable.reg,
+								  avr_exint_enable_change, p);
+		}
 
-                // Watch control registers - only once.
+		// Watch control registers - only once.
         
-                for (j = 0; j < i; j++) {
-                        if (p->eint[j].isc[0].reg == ip->isc[0].reg ||
-                            p->eint[j].isc[1].reg == ip->isc[0].reg) {
-                                // Already registered.
+		for (j = 0; j < i; j++) {
+			if (p->eint[j].isc[0].reg == ip->isc[0].reg ||
+				p->eint[j].isc[1].reg == ip->isc[0].reg) {
+				// Already registered.
 
-                                break;
-                        }
-                }
-                if (i == j) {
-                        avr_register_io_write(avr, ip->isc[0].reg,
-                                              avr_exint_control_change, p);
-                }
-                if (ip->isc[1].reg &&
-                    ip->isc[1].reg != ip->isc[0].reg) {
-                        for (j = 0; j < i; j++) {
-                                if ((p->eint[j].isc[0].reg ==
-                                     ip->isc[1].reg) ||
-                                    (p->eint[j].isc[1].reg ==
-                                     ip->isc[1].reg)) {
-                                        // Already registered.
+				break;
+			}
+		}
+		if (i == j) {
+			avr_register_io_write(avr, ip->isc[0].reg,
+								  avr_exint_control_change, p);
+		}
+		if (ip->isc[1].reg &&
+			ip->isc[1].reg != ip->isc[0].reg) {
+			for (j = 0; j < i; j++) {
+				if ((p->eint[j].isc[0].reg == ip->isc[1].reg) ||
+					(p->eint[j].isc[1].reg == ip->isc[1].reg)) {
+					// Already registered.
 
-                                        break;
-                                }
-                        }
-                        if (i == j) {
-                                avr_register_io_write(avr,
-                                                      ip->isc[0].reg,
-                                                      avr_exint_control_change,
-                                                      p);
-                        }
-                }
-        }
+					break;
+				}
+			}
+			if (i == j) {
+				avr_register_io_write(avr,
+									  ip->isc[0].reg,
+									  avr_exint_control_change,
+									  p);
+			}
+		}
 
+		if (!p->eint[i].port_ioctl)
+			break;
+		avr_register_vector(avr, &p->eint[i].vector);
+	}
 	// allocate this module's IRQ
 
 	avr_io_setirqs(&p->io, AVR_IOCTL_EXTINT_GETIRQ(), EXTINT_COUNT, NULL);

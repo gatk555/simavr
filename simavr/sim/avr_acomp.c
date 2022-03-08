@@ -193,10 +193,8 @@ static int avr_acomp_ioctl(struct avr_io_t *io, uint32_t ctl, void *io_param)
 		const avr_pin_info_t ** ipp;
 
 		ipp = (const avr_pin_info_t **)io_param;
-		if (p->pin_info)
-			*ipp = p->pin_info + 1; // Offset so [0] is AIN0.
-		else
-			*ipp = NULL;
+		if (ipp)
+			*ipp = p->pin_info; // May be null
 		return 0;
 	}
 	return -1;
@@ -216,8 +214,8 @@ avr_acomp_reset(avr_io_t * port)
 	// updates the actual memory too. Given this is for the registers this module
 	// does not own, it is tricky to know whether it should write to the actual memory.
 	// E.g., if there is already a native handler for it then it will do the writing
-	// (possibly even omitting some bits etc). IInterefering would probably be wrong.
-	// On the  other hand if there isn't a handler already, then this hadnler would have to,
+	// (possibly even omitting some bits etc). Interfering would probably be wrong.
+	// On the  other hand if there isn't a handler already, then this handler would have to,
 	// as otherwise nobody will.
 	// This write notification mechanism should probably need reviewing and fixing
 	// For now using IRQ mechanism, as it is not intrusive

@@ -3,6 +3,8 @@
 #include "tests.h"
 #include "avr_ioport.h"
 
+#define DDRB_ADDR (0x4 + 32) // From ATM168 header file.
+
 /* Start of the IOPORT's IRQ list. */
 
 static avr_irq_t *base_irq;
@@ -20,6 +22,16 @@ static char *fill = log;
 static void monitor_5(struct avr_irq_t *irq, uint32_t value, void *param)
 {
     LOG("5-%02X ", value);
+}
+
+/* IRQ call-back for changes to the simulated DDRB register.
+ * This is to test an IRQ returned by avr_iomem_getirq() and not really
+ * specifically for GPIO.
+ */
+
+static void monitor_ddrb(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    LOG("BD-%02X ", value);
 }
 
 /* This monitors the simulator's idea of the I/O pin states.
@@ -90,20 +102,31 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 
 /* This string should be sent by the firmware. */
 
-static const char *expected = "P<2A P<70 F<01 I<E4 P<E4 "
-                              "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
-                              "P>01 J<03 J<00 P<E0 | K | ";
+static const char *expected =
+#ifdef CONFIG_PULL_UPS
+    "P<2A P<70 F<01 I<E4 P<E4 "
+    "L1 L0 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
+    "P>01 J<03 J<00 P<E0 | K | ";
+#else // Estimated - FIX ME
+    "P<2A P<70 F<01 I<E0 P<E0 "
+    "L1 L0 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
+    "P>01 J<03 J<00 P<00 | K | ";
+#endif
 
 /* This string is expected in variable log. */
 
 static const char *log_expected =
-    "d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 P-F0 "
-    "I-70 "                                     // Interrupts off testing.
-    "o-E0 P-E4 I-E4 I-E4 "                      // External 0 interrupt test.
-    "o-08 5-00 P-C8 o-00 P-C0 o-08 P-C8 o-00 "  // External 1 interrupt test.
-    "P-C0 "
-    "d-03 o-01 P-C1 o-03 P-C3 o-00 P-C0 I-C0 "  // Pin change interrupt test.
-    "5-01 P-E0 "; // Artifact: new value created in PIND read and IRQed.
+    "BD-01 d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 "
+#ifdef CONFIG_PULL_UPS
+    "P-F0 I-70 "                                // Interrupts off testing.
+    "o-E0 P-E0 I-E0 I-E0 "                      // External interrupt test.
+    "d-03 o-01 P-E1 o-03 P-E3 o-00 P-E8 I-E8 "  // Pin change interrupt test.
+#else
+    "P-30 I-30 "                                // Interrupts off testing.
+    "o-E0 P-20 I-20 I-20 "                      // External interrupt test.
+    "d-03 o-01 P-21 o-03 P-23 o-00 P-28 I-28 "  // Pin change interrupt test.
+#endif
+    "BD-FF ";                                   // iomem IRQ test.
 
 
 int main(int argc, char **argv) {
@@ -111,18 +134,26 @@ int main(int argc, char **argv) {
 
 	tests_init(argc, argv);
         avr = tests_init_avr("atmega168_ioport.axf");
-        base_irq = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 0);
 
+        base_irq = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 0);
         avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN5,
                                 monitor_5, NULL);
         avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN_ALL,
                                 monitor, NULL);
+        avr_irq_register_notify(avr_iomem_getirq(avr, DDRB_ADDR, NULL, 8),
+                                monitor_ddrb, NULL);
         avr_irq_register_notify(base_irq + IOPORT_IRQ_DIRECTION_ALL,
                                 reg_write, NULL);
         avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PORT,
                                 reg_write, NULL);
         avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PIN,
                                 reg_read, NULL);
+
+        /* Tweak DDRB to confirm IO-memory based IRQs are working. */
+
+        avr_core_watch_write(avr, DDRB_ADDR, 1);
+
+        /* Run ... */
 
         tests_assert_uart_receive_avr(avr, 100000, expected, '0');
 

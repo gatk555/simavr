@@ -407,10 +407,8 @@ static int avr_adc_ioctl(struct avr_io_t *io, uint32_t ctl, void *io_param)
 		const avr_pin_info_t ** ipp;
 
 		ipp = (const avr_pin_info_t **)io_param;
-		if (p->pin_info)
-			*ipp = p->pin_info + 1; // Offset so [0] is ADC0.
-		else
-			*ipp = NULL;
+		if (ipp)
+			*ipp = p->pin_info; // May be null
 		return 0;
 	}
 	return -1;

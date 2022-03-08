@@ -77,7 +77,7 @@ int main()
 
         /* This should say P<70 - pullups and direct output give 0xF0
          * but the caller sees that and turns off bit 7 input,
-         * overriding that pullup.
+         * overriding that pullup.  With pullups disabled: P<30.
          */
 
         printf("P<%02X ", PIND);

@@ -40,6 +40,14 @@ avr_ioctl(
 			res = port->ioctl(port, ctl, io_param);
 		port = port->next;
 	}
+	if (ctl == AVR_IOCTL_COMMON_GETPINS) {
+		const avr_pin_info_t ** ipp;
+
+		ipp = (const avr_pin_info_t **)io_param;
+		if (ipp)
+			*ipp = avr->pin_info; // May be null
+		return 0;
+	}
 	return res;
 }
 
@@ -161,7 +169,7 @@ avr_io_getirq(
 			return port->irq + index;
 		port = port->next;
 	}
-	if (ctl == AVR_IOCTL_CPU_GETIRQ) // CPU IRQs
+	if (ctl == AVR_IOCTL_COMMON_GETIRQ) // CPU IRQs
 		return avr->irq + index;
 	return NULL;
 }

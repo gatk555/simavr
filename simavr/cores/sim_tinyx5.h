@@ -62,14 +62,17 @@ struct mcu_t {
 #endif
 
 static const avr_pin_info_t adc_pins[] = {
-	{'B', 0}, // AREF
 	{'B', 5}, {'B', 2}, {'B', 4}, {'B', 3}, // ADC0-3
 	{0, 0}
 };
 
 static const avr_pin_info_t acomp_pins[] = {
-	{'B', 0}, // AREF
 	{'B', 0}, {'B', 1}, // AIN0-1
+	{0, 0}
+};
+
+static const avr_pin_info_t common_pins[] = {
+	{'B', 0}, // AREF
 	{0, 0}
 };
 
@@ -80,6 +83,7 @@ const struct mcu_t SIM_CORENAME = {
 
 		.init = tx5_init,
 		.reset = tx5_reset,
+                .pin_info = common_pins,
 	},
 	AVR_EEPROM_DECLARE(EE_RDY_vect),
 	AVR_WATCHDOG_DECLARE(WDTCR, WDT_vect),
@@ -122,9 +126,10 @@ const struct mcu_t SIM_CORENAME = {
 					AVR_IO_REGBIT(ADMUX, MUX2), AVR_IO_REGBIT(ADMUX, MUX3),},
 		.ref = { AVR_IO_REGBIT(ADMUX, REFS0), AVR_IO_REGBIT(ADMUX, REFS1), AVR_IO_REGBIT(ADMUX, REFS2), },
 		.ref_values = {
-				[0] = ADC_VREF_VCC, [1] = ADC_VREF_AVCC,
-				[2] = ADC_VREF_V110, [5] = ADC_VREF_V256,
-				[6] = ADC_VREF_V256,
+				[0] = ADC_VREF_VCC,
+				[2] = ADC_VREF_V110,
+				[4] = ADC_VREF_VCC,
+				[6] = ADC_VREF_V256, [7] = ADC_VREF_V256,
 		},
 
 		.adlar = AVR_IO_REGBIT(ADMUX, ADLAR),

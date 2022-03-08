@@ -466,6 +466,8 @@ avr_vcd_flush_log(
 							&vcd->signal[l.sigindex],
 							out, l.value));
 	}
+
+   fflush(vcd->output);
 }
 
 /* Cycle timer for writing queued output. */

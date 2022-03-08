@@ -199,6 +199,12 @@ typedef struct avr_t {
 	// like, sleeping.
 	avr_cycle_count_t	cycle;		// current cycle
 
+        // This is set from the 'when' argument of any cycle timer that makes
+        // an externally-visible change, so that the actual event time is
+        // available.  Output only, so may be reset by user.
+
+        avr_cycle_count_t       timer_cycle;
+
 	// these next two allow the core to freely run between cycle timers and also allows
 	// for a maximum run cycle limit... run_cycle_count is set during cycle timer processing.
 	avr_cycle_count_t	run_cycle_count;	// cycles to run before next timer
@@ -370,26 +376,35 @@ typedef struct avr_t {
 
 	const char ** data_names;
 
+    // Optional map of special function pins (AREF, AVCC ... ).
+
+	const struct avr_pin_info *pin_info;
 } avr_t;
 
-// CPU IRQs and IOCTL to get them.
+// IRQs for shared analogue voltages and IOCTL to get them.
 
 enum {
-      CPU_IRQ_VCC = 0, CPU_IRQ_AVCC, CPU_IRQ_AREF,
-      CPU_IRQ_COUNT
+      COMMON_IRQ_VCC = 0, COMMON_IRQ_AVCC, COMMON_IRQ_AREF,
+      COMMON_IRQ_COUNT
 };
 
-#define AVR_IOCTL_CPU_GETIRQ AVR_IOCTL_DEF('C','P','U','0')
+#define AVR_IOCTL_COMMON_GETIRQ AVR_IOCTL_DEF('C','P','U','0')
 
 // Structure to hold assignements of analogue inputs to pins.
 // This information is not currently used inside simavr, but can
 // be transcribed from data sheets and made available to applications.
 // The data is stored in an array of structure and made available
-// via ioctls.  The returned pointer is offset so that there is an
-// entry at negative offset for the external voltage reference pin.
+// via ioctls.  The port letter is a space if the pin is not shared with GPIO.
+
+// IOCTL to get information on special function pins and indices to
+// the array returned.
+
+#define AVR_IOCTL_COMMON_GETPINS AVR_IOCTL_DEF('C','P','U','p')
+#define AVR_PIN_AREF 0
+#define AVR_PIN_AVCC 1
 
 typedef struct avr_pin_info {
-	char	port_letter; // A-Z or null for termination.
+	char	port_letter; // A-Z, space or null for termination.
 	uint8_t pin;
 } avr_pin_info_t;
 
@@ -402,6 +417,7 @@ typedef struct avr_kind_t {
 // a symbol loaded from the .elf file
 typedef struct avr_symbol_t {
 	uint32_t	addr;
+	uint32_t	size;
 	const char  symbol[0];
 } avr_symbol_t;
 

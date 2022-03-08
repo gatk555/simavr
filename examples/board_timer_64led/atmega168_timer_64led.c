@@ -459,8 +459,10 @@ int main(void)
 
 	tick_init();
 
-	startShowHours(4 * TICK_SECOND);
-	
+#ifdef HOURS_CHECK
+	startShowHours(4 * TICK_SECOND); // Show hours briefly at start.
+#endif	
+
 	timer[delay_Second].callback = second_timer_callback;
 	timer[delay_Update].callback = update_timer_callback;
 	second_timer_callback(&timer[delay_Second]);	// get started

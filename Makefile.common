@@ -43,6 +43,10 @@ CFLAGS		+= -O2 -Wall -Wextra -Wno-unused-parameter \
 			-Wno-unused-result -Wno-missing-field-initializers \
 			-Wno-sign-compare
 CFLAGS		+= -g
+# Add feature defines that are also used throughout.
+
+CFLAGS	+= -DCONFIG_PULL_UPS=1
+
 CORE_CFLAGS	= -DAVR_CORE=1
 
 ifeq (${shell uname}, Darwin)
@@ -66,7 +70,7 @@ ifeq (${shell uname}, Darwin)
   # That's for Homebrew libelf and avr-gcc support
   HOMEBREW_PREFIX ?= /usr/local
   ifeq (${shell test -d $(HOMEBREW_PREFIX)/Cellar && echo Exists}, Exists)
-   ifneq (${shell test -d $(HOMEBREW_PREFIX)/Cellar/avr-gcc/ && echo Exists}, Exists)
+   ifneq (${shell test -d $(HOMEBREW_PREFIX)/Cellar/avr-gcc* && echo Exists}, Exists)
     $(error Please install avr-gcc: brew tap osx-cross/homebrew-avr ; brew install avr-libc)
    endif
    ifneq (${shell test -d $(HOMEBREW_PREFIX)/Cellar/libelf/ && echo Exists}, Exists)
@@ -220,10 +224,12 @@ endif
 ${OBJ}/%.so: ${OBJ}/%.so.1
 	ln -sf ${notdir $<} $@
 
+.PHONY: obj ${OBJ}
+
 obj: ${OBJ}
 
 ${OBJ}:
-	${E}mkdir -p ${OBJ}
+	${E}-mkdir -p ${OBJ}
 
 clean-${OBJ}:
 	rm -rf ${OBJ}
