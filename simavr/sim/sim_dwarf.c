@@ -135,7 +135,7 @@ static void process(struct ctx *ctxp, Dwarf_Die die)
                     symv -= DATA_OFFSET;
 
 
-                    /* Is it an I/O register? */
+                    /* Is it an I/O register or RAM? */
 
                     if (symv > 32 &&
 #if CONFIG_SIMAVR_TRACE
@@ -315,11 +315,12 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
 
 #if CONFIG_SIMAVR_TRACE
         const char *last_symbol = NULL;
-        int         i;
+        int         i, prev_line;
+
 
         get_lines(&ctx, die);
         traverse_tree(&ctx, die);
-        for (i = 0; i < ctx.line_count; ++i) {
+        for (i = 0, prev_line = -1; i < ctx.line_count; ++i) {
             Dwarf_Unsigned    lineno;
             Dwarf_Addr        addr;
             const char      **ep;
@@ -329,6 +330,9 @@ int avr_read_dwarf(avr_t *avr, const char *filename)
             CHECK("dwarf_lineno");
             rv = dwarf_lineaddr(ctx.lines[i], &addr, &err);
             CHECK("dwarf_lineaddr");
+            if (prev_line == lineno)
+                continue;	// Ignore duplicates
+            prev_line = lineno;
             if (addr == 0) // Inlined?
                 continue;
             ep = avr->trace_data->codeline + (addr >> 1);
