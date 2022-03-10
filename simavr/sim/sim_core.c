@@ -224,27 +224,7 @@ static inline void _avr_set_r(avr_t * avr, uint16_t r, uint8_t v)
 {
 	if (r > 31) fprintf(stderr, "Register > 31 in _avr_set_r: %#x\n", r), abort();
 	REG_TOUCH(avr, r);
-
-	if (r == R_SREG) {
-		avr->data[R_SREG] = v;
-		// unsplit the SREG
-		SET_SREG_FROM(avr, v);
-		SREG();
-	}
-	if (r > 31) {
-		avr_io_addr_t io = AVR_DATA_TO_IO(r);
-		if (avr->io[io].w.c) {
-			avr->io[io].w.c(avr, r, v, avr->io[io].w.param);
-		} else {
-			avr->data[r] = v;
-			if (avr->io[io].irq) {
-				avr_raise_irq(avr->io[io].irq + AVR_IOMEM_IRQ_ALL, v);
-				for (int i = 0; i < 8; i++)
-					avr_raise_irq(avr->io[io].irq + i, (v >> i) & 1);
-			}
-		}
-	} else
-		avr->data[r] = v;
+	avr->base[r] = v;
 }
 
 // These are used only for CPU registers.
@@ -293,18 +273,14 @@ static inline void _avr_set_ram(avr_t * avr, uint16_t addr, uint8_t v)
 			SREG();
 		}
 		if (avr->io[io_addr].w.c) {
-			avr->io[io_addr].w.c(avr, addr, v,
-					     avr->io[io_addr].w.param);
+			avr->io[io_addr].w.c(avr, addr, v, avr->io[io_addr].w.param);
 		} else {
 			avr->data[addr] = v;
-		}
-
-		if (avr->io[io_addr].irq) {
-			avr_raise_irq(avr->io[io_addr].irq + AVR_IOMEM_IRQ_ALL,
-				      v);
-			for (int i = 0; i < 8; i++)
-				avr_raise_irq(avr->io[io_addr].irq + i,
-					      (v >> i) & 1);
+			if (avr->io[io_addr].irq) {
+				avr_raise_irq(avr->io[io_addr].irq + AVR_IOMEM_IRQ_ALL, v);
+				for (int i = 0; i < 8; i++)
+					avr_raise_irq(avr->io[io_addr].irq + i, (v >> i) & 1);
+			}
 		}
 	} else {
 		avr_core_watch_write(avr, addr, v);
@@ -339,7 +315,7 @@ static inline uint8_t _avr_get_ram(avr_t * avr, uint16_t addr)
 		 * SREG is special it's reconstructed when read
 		 * while the core itself uses the "shortcut" array
 		 */
-		READ_SREG_INTO(avr, avr->data[R_SREG]);
+		READ_SREG_INTO(avr, avr->iobase[R_SREG]);
 
 	} else if (addr >= avr->io_offset && io_addr < MAX_IOs) {
 		avr_io_addr_t io = AVR_DATA_TO_IO(addr);
@@ -391,11 +367,13 @@ avr_flashaddr_t _avr_pop_addr(avr_t * avr)
 	return res;
 }
 
+/* CPU registers are 0-31 here. */
+
 const char * avr_regname(avr_t *avr, uint16_t reg)
 {
 	static const char pairs[] = {'X', 'Y', 'Z'};
 
-        if (reg > avr->ioend)
+	if (reg > avr->ioend)
 		return NULL;
 	if (!avr->data_names[reg]) {
 		char tt[16];
@@ -403,15 +381,14 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 			sprintf(tt, "r%d", reg);
 		} else {
 			if (reg < 32)
-				sprintf(tt, "%c%c",
-					pairs[(reg - 26) >> 1],
-					(reg & 1) ? 'H' : 'L');
-			else if (((reg + 1) & ~1) == R_SPH)
+				sprintf(tt, "%c%c", pairs[(reg - 26) >> 1],
+						(reg & 1) ? 'H' : 'L');
+			else if (((reg + 1) & ~1) == R_SPH + 32)
 				sprintf(tt, "SP%c", (reg & 1) ? 'L' : 'H');
-			else if (reg == R_SREG)
+			else if (reg == R_SREG + 32)
 				sprintf(tt, "SREG");
 			else
-				sprintf(tt, "io:%02x", reg);
+				sprintf(tt, "io:%02x", reg - 32);
 		}
 		avr->data_names[reg] = strdup(tt);
 	}
@@ -424,7 +401,7 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 
 // Argument is an IO register's RAM address.
 
-#define AVR_REGNAME_IO(reg) avr_regname(avr, (reg) + (avr->io_offset) ? 0 : 32)
+#define AVR_REGNAME_IO(reg) avr_regname(avr, (reg) + 32 - avr->io_offset)
 
 /*
  * Called when an invalid opcode is decoded
@@ -1444,8 +1421,7 @@ SREG();
 			switch (opcode & 0xf800) {
 				case 0xb800: {	// OUT A,Rr -- 1011 1AAd dddd AAAA
 					get_d5_a6(opcode);
-//					STATE("out %s, %s[%02x]\n", AVR_REGNAME_IO(A), AVR_REGNAME(d), avr->base[d]);
-					STATE("out %s(%02x), %s[%02x]\n", AVR_REGNAME_IO(A), A, AVR_REGNAME(d), avr->base[d]);
+					STATE("out %s, %s[%02x]\n", AVR_REGNAME_IO(A), AVR_REGNAME(d), avr->base[d]);
 					_avr_set_ram(avr, A, avr->base[d]);
 				}	break;
 				case 0xb000: {	// IN Rd,A -- 1011 0AAd dddd AAAA

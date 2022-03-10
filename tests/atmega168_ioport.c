@@ -49,7 +49,7 @@ ISR(PCINT0_vect)
 ISR(PCINT2_vect)
 {
     printf("J<%02X ", PORTD);
-    PORTD = 0;
+    PORTD = 0; // Causes second pin-change interrupt
 }
 
 int main()

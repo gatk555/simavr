@@ -326,7 +326,7 @@ typedef struct avr_t {
 
 	uint8_t *		base;		// CPU registors
 	uint8_t *		iobase;		// IO registers
-	uint8_t *		data;		// Addressable memeory
+	uint8_t *		data;		// Addressable memory
 	uint16_t		io_offset;	// Difference: iobase - data
 
 	// queue of io modules
