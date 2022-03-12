@@ -147,9 +147,13 @@ int tests_run_test(avr_t *avr, unsigned long run_usec, int (*run)(avr_t *)) {
 	return 0;
 }
 
+int tests_run_avr(avr_t *avr, unsigned long run_usec) {
+	return tests_run_test(avr, run_usec, my_avr_run);
+}
+
 int tests_init_and_run_test(const char *elfname, unsigned long run_usec) {
 	avr_t *avr = tests_init_avr(elfname);
-	return tests_run_test(avr, run_usec, my_avr_run);
+	return tests_run_avr(avr, run_usec);
 }
 
 /* Callback for receiving data via an IRQ. */

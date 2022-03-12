@@ -40,6 +40,7 @@ void tests_init(int argc, char **argv);
 void tests_success(void);
 
 int tests_run_test(avr_t *avr, unsigned long run_usec, int (*run)(avr_t *));
+int tests_run_avr(avr_t *avr, unsigned long run_usec);
 int tests_init_and_run_test(const char *elfname, unsigned long run_usec);
 void tests_assert_uart_receive(const char *elfname,
 			       unsigned long run_usec,
