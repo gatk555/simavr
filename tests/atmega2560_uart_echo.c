@@ -38,12 +38,10 @@ const struct avr_mmcu_vcd_trace_t _mytrace[]  _MMCU_ = {
 	{ AVR_MCU_VCD_SYMBOL("GPIOR1"), .what = (void*)&GPIOR1, },
 };
 
-#if IRQ_IRQS
 #ifdef USART3_RX_vect_num	// stupid ubuntu has antique avr-libc
 AVR_MCU_VCD_IRQ(USART3_RX);	// single bit trace
 #endif
 AVR_MCU_VCD_ALL_IRQ();		// also show ALL irqs running
-#endif
 
 volatile uint8_t cnt = 0;
 volatile uint8_t done = 0;

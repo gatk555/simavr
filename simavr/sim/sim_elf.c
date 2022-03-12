@@ -210,15 +210,15 @@ avr_load_firmware(
 					firmware->trace[ti].name[0] ?
 						firmware->trace[ti].name : name);
 			}
-#if IRQ_IRQS
 		} else if (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_IRQ) {
-			avr_irq_t * bit = avr_get_interrupt_irq(avr, firmware->trace[ti].mask);
+			avr_irq_t * bit;
+
+			bit = avr_get_interrupt_irq(avr, firmware->trace[ti].mask);
 			if (bit && firmware->trace[ti].addr < AVR_INT_IRQ_COUNT)
 				avr_vcd_add_signal(avr->vcd,
-						&bit[firmware->trace[ti].addr],
-						firmware->trace[ti].mask == 0xff ? 8 : 1,
-						firmware->trace[ti].name);
-#endif
+								   &bit[firmware->trace[ti].addr],
+								   firmware->trace[ti].mask == 0xff ? 8 : 1,
+								   firmware->trace[ti].name);
 		} else if (firmware->trace[ti].mask == 0xff ||
 				firmware->trace[ti].mask == 0) {
 			// easy one
@@ -446,7 +446,7 @@ elf_read_firmware(
 		} else if (!strcmp(name, ".mmcu")) {
 			Elf_Data *s = elf_getdata(scn, NULL);
 			elf_parse_mmcu_section(firmware, s->d_buf, s->d_size);
-			//printf("%s: avr_mcu_t size %ld / read %ld\n", __FUNCTION__, sizeof(struct avr_mcu_t), s->d_size);
+		//	printf("%s: size %ld\n", __FUNCTION__, s->d_size);
 		//	avr->frequency = f_cpu;
 		}
 #if ELF_SYMBOLS

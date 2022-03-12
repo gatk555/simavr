@@ -30,27 +30,48 @@
 extern "C" {
 #endif
 
+/* Interrupt IRQs. common and per-vector. */
+
+enum {
+	AVR_INT_IRQ_PENDING = 0,
+	AVR_INT_IRQ_RUNNING,
+	AVR_INT_IRQ_COUNT,
+	AVR_INT_ANY		= 0xff,	// for avr_get_interrupt_irq()
+};
+
 // Interrupt structure for the IO modules
 
 typedef struct avr_int_vector_t {
-	uint8_t 	vector;	// vector number, zero (reset) is reserved
-	uint8_t		pending : 1, 	    // Wants to run.
-			level : 1,          // Level-triggered is active.
-			indirect : 1,       // Handle duplicates
-			trace : 1,	    // For debug.
-			raise_sticky : 1,   // Do not auto-clear .raised.
-			clear_both : 1;     // Auto-clear .enable as well.
+	uint8_t 		vector;	// vector number, zero (reset) is reserved
+	uint8_t			pending : 1, 	    // Wants to run.
+					level : 1,          // Level-triggered is active.
+					indirect : 1,       // Handle duplicates
+					trace : 1,		    // For debug.
+					raise_sticky : 1,   // Do not auto-clear .raised.
+					clear_both : 1;     // Auto-clear .enable as well.
 
 	avr_regbit_t 	enable;	// Peripheral's interrupt enable bit.
 	avr_regbit_t 	raised;	// Peripheral's interrupt flag  bit.
+
+	// Pending and running IRQ status as signaled here
+
+	avr_irq_t		irq[AVR_INT_IRQ_COUNT];
 } avr_int_vector_t, *avr_int_vector_p;
 
 /* Interrupt control table, embedded in struct avr_t. */
 
 #define MAX_VECTOR_COUNT 64
 typedef struct avr_int_table_t {
-	uint8_t		 	 max_vector, pending_count, next_vector;
-	avr_int_vector_t	*vectors[MAX_VECTOR_COUNT];
+	uint8_t           max_vector, pending_count, next_vector, running_ptr;
+	avr_int_vector_t *vectors[MAX_VECTOR_COUNT];
+
+	/* Global status for pending + running in interrupt context.
+	 * Tracking running interrupts can only work with conventional use
+	 * but the code is intended to survive abuse as well.
+	 */
+
+	uint8_t           running[MAX_VECTOR_COUNT];
+	avr_irq_t		  irq[AVR_INT_IRQ_COUNT];
 } avr_int_table_t, *avr_int_table_p;
 
 /*
@@ -129,7 +150,6 @@ avr_clear_interrupt_if(
 		avr_int_vector_t * vector,
 		uint8_t old);
 
-#ifdef IRQ_IRQS
 // Return the IRQ that is raised when the vector is enabled and called/cleared.
 // This allows tracing of pending interrupts.
 
@@ -137,7 +157,6 @@ avr_irq_t *
 avr_get_interrupt_irq(
 		struct avr_t * avr,
 		uint8_t v);
-#endif
 
 // Initializes the interrupt table.
 
