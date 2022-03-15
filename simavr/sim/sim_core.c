@@ -44,6 +44,8 @@ const char * _sreg_bit_name = "cznvshti";
 #define REG_TOUCH(a, r) (a)->trace_data->touched[(r) >> 5] |= (1 << ((r) & 0x1f))
 #define REG_ISTOUCHED(a, r) ((a)->trace_data->touched[(r) >> 5] & (1 << ((r) & 0x1f)))
 
+//#define RESTRICT_TRACE
+#ifdef RESTRICT_TRACE
 /*
  * This allows a "special case" to skip instruction tracing when in these
  * symbols since printf() is useful to have, but generates a lot of cycles.
@@ -51,35 +53,60 @@ const char * _sreg_bit_name = "cznvshti";
 int dont_trace(const char * name)
 {
 	return (
-		!strcmp(name, "uart_putchar") ||
+		!strncmp(name, "uart_putchar", 12) ||
 		!strcmp(name, "fputc") ||
+		!strcmp(name, "puts") ||
 		!strcmp(name, "printf") ||
 		!strcmp(name, "vfprintf") ||
 		!strcmp(name, "__ultoa_invert") ||
 		!strcmp(name, "__prologue_saves__") ||
 		!strcmp(name, "__epilogue_restores__"));
 }
+#endif
 
-int donttrace = 0;
+/* Get symbol or line number for a flash addess.
+ * Returns NULL only if in a tracing-restricted function.
+ * Show registed values when restriction changes.
+ */
 
-#define STATE(_f, args...) { \
-	const char * symn = "";\
-	if (avr->trace) {\
-		if (avr->trace_data->codeline &&\
-		    avr->trace_data->codeline[avr->pc>>1]) {\
-			symn = avr->trace_data->codeline[avr->pc>>1]; \
-			int dont = 0 && dont_trace(symn);\
-			if (dont!=donttrace) { \
-				donttrace = dont;\
-				DUMP_REG();\
-			}\
-		} else \
-			donttrace = 0;\
-		if (donttrace == 0)\
-			printf("%04x: %-25s " _f, avr->pc, symn, ## args); \
-		}\
+static int donttrace;
+
+static const char *where(avr_t *avr)
+{
+	avr_flashaddr_t  pc;
+	const char      *s;
+
+	pc = avr->pc >> 1; // Words
+	if (avr->trace_data->codeline &&
+		pc < avr->trace_data->codeline_size) {
+		s = avr->trace_data->codeline[pc];
+#ifdef RESTRICT_TRACE
+		int	dont = dont_trace(s);
+		if (dont) {
+			if (!donttrace) {
+				printf("\nCalling restricted function %s\n", s);
+				DUMP_REG();
+			}
+		} else if (donttrace) {
+			DUMP_REG();
+		}
+		donttrace = dont;
+		if (donttrace)
+			return NULL;
+#endif
+		if (s)
+			return s;
 	}
-#define SREG() if (avr->trace && donttrace == 0) {\
+	return "";
+}
+
+#define STATE(_f, argsf ...)	if (avr->trace) {				\
+	const char *symn = where(avr);							\
+	if (symn)												\
+		printf("%04x: %-25s " _f, avr->pc, symn, ## argsf);	\
+}
+
+#define SREG() if (avr->trace && donttrace == 0) {	  \
 	printf("%04x: \t\t\t\t\t\t\t\tSREG = ", avr->pc); \
 	for (int _sbi = 0; _sbi < 8; _sbi++)\
 		printf("%c", avr->sreg[_sbi] ? toupper(_sreg_bit_name[_sbi]) : '.');\
@@ -105,7 +132,7 @@ static const char *get_data_address_string(avr_t* avr, uint16_t addr)
 void crash(avr_t* avr)
 {
 	DUMP_REG();
-	printf("*** CYCLE %" PRI_avr_cycle_count "PC %04x\n", avr->cycle, avr->pc);
+	printf("*** CYCLE %" PRI_avr_cycle_count " PC %04x\n", avr->cycle, avr->pc);
 
 	for (int i = OLD_PC_SIZE-1; i > 0; i--) {
 		int pci = (avr->trace_data->old_pci + i) & 0xf;
@@ -695,12 +722,16 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 	/*
 	 * this traces spurious reset or bad jumps
 	 */
-	if ((avr->pc == 0 && avr->cycle > 0) || avr->pc >= avr->codeend || _avr_sp_get(avr) > avr->ramend) {
+	if ((avr->pc == 0 && avr->cycle > 0) || avr->pc >= avr->codeend ||
+		_avr_sp_get(avr) > avr->ramend) {
 //		avr->trace = 1;
 		STATE("RESET\n");
+//		printf("Bad: %d %d %d %x\n", (avr->pc == 0 && avr->cycle > 0),
+//		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->pc);
 		crash(avr);
 	}
-	avr->trace_data->touched[0] = avr->trace_data->touched[1] = avr->trace_data->touched[2] = 0;
+	avr->trace_data->touched[0] = avr->trace_data->touched[1] =
+		avr->trace_data->touched[2] = 0;
 #endif
 
 	/* Ensure we don't crash simavr due to a bad instruction reading past

@@ -61,12 +61,14 @@ void avr_dump_state(avr_t * avr);
 #define AVR_REGNAME(reg) avr_regname(avr, reg)
 
 #define DUMP_REG() { \
-				for (int i = 0; i < 32; i++) printf("%s=%02x%c", AVR_REGNAME(i), avr->data[i],i==15?'\n':' ');\
-				printf("\n");\
-				uint16_t y = avr->data[R_YL] | (avr->data[R_YH]<<8);\
-				for (int i = 0; i < 20; i++) printf("Y+%02d=%02x ", i, avr->data[y+i]);\
-				printf("\n");\
-		}
+	for (int i = 0; i < 32; i++) \
+		printf("%s=%02x%c", AVR_REGNAME(i), avr->data[i], \
+			   (i % 8) == 7 ? '\n' : ' '); \
+	uint16_t y = avr->data[R_YL] | (avr->data[R_YH] << 8); \
+	for (int i = 0; i < 20; i++) \
+		printf("Y+%02d=%02x%c", i, avr->data[y+i], i % 10 == 9 ? '\n' : ' '); \
+	printf("\n"); \
+}
 
 
 #if AVR_STACK_WATCH
