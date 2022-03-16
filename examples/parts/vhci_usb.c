@@ -182,7 +182,7 @@ handle_status_change(
 		if (p->attached) {
 			if (usb_vhci_port_connect(p->fd, 1, USB_VHCI_DATA_RATE_FULL) < 0) {
 				perror("port_connect");
-				abort();
+				avr_abort();
 			}
 		}
 	}
@@ -202,7 +202,7 @@ handle_status_change(
 		if (curr->status & USB_VHCI_PORT_STAT_CONNECTION) {
 			if (usb_vhci_port_reset_done(p->fd, 1, 1) < 0) {
 				perror("reset_done");
-				abort();
+				avr_abort();
 			}
 		}
 	}
@@ -213,7 +213,7 @@ handle_status_change(
 			printf("  completing\n");
 			if (usb_vhci_port_resumed(p->fd, 1) < 0) {
 				perror("resumed");
-				abort();
+				avr_abort();
 			}
 		}
 	}
@@ -290,7 +290,7 @@ vhci_usb_thread(
 	if (p->fd < 0) {
 		perror("open vhci failed");
 		printf("driver loaded, and access bits ok?\n");
-		abort();
+		avr_abort();
 	}
 	printf("Created virtual usb host with 1 port at %s (bus# %d)\n", busid,
 	        busnum);
@@ -308,7 +308,7 @@ vhci_usb_thread(
 				if (usb_vhci_port_connect(p->fd, 1, USB_VHCI_DATA_RATE_FULL)
 				        < 0) {
 					perror("port_connect");
-					abort();
+					avr_abort();
 				}
 			}
 			if (!p->attached) {
@@ -322,7 +322,7 @@ vhci_usb_thread(
 			if (errno == ETIMEDOUT || errno == EINTR || errno == ENODATA)
 				continue;
 			perror("fetch work failed");
-			abort();
+			avr_abort();
 		}
 
 		switch (wrk.type) {
@@ -384,7 +384,7 @@ vhci_usb_thread(
 				break;
 			default:
 				printf("illegal work type\n");
-				abort();
+				avr_abort();
 		}
 
 	}

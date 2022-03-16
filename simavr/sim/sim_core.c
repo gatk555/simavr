@@ -250,7 +250,10 @@ uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 
 static inline void _avr_set_r(avr_t * avr, uint16_t r, uint8_t v)
 {
-	if (r > 31) fprintf(stderr, "Register > 31 in _avr_set_r: %#x\n", r), abort();
+	if (r > 31) {
+		fprintf(stderr, "Register > 31 in _avr_set_r: %#x\n", r);
+		avr_abort();
+	}
 	REG_TOUCH(avr, r);
 	avr->base[r] = v;
 }
@@ -727,8 +730,8 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 		_avr_sp_get(avr) > avr->ramend) {
 //		avr->trace = 1;
 		STATE("RESET\n");
-//		printf("Bad: %d %d %d %x\n", (avr->pc == 0 && avr->cycle > 0),
-//		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->pc);
+//		printf("Bad: %d %d %d %ld\n", (avr->pc == 0 && avr->cycle > 0),
+//		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->cycle);
 		crash(avr);
 	}
 	avr->trace_data->touched[0] = avr->trace_data->touched[1] =

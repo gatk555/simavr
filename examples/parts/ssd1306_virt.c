@@ -321,7 +321,7 @@ ssd1306_twi_hook (struct avr_irq_t * irq, uint32_t value, void * param)
 				if ((v.u.twi.data & (~(1<<6))) != 0) {
 					printf("%s COND_WRITE %x\n", __FUNCTION__, v.u.twi.data);
 					printf("%s ALERT: unhandled Co bit\n", __FUNCTION__);
-					abort();
+					avr_abort();
 				}
 				p->di_pin = v.u.twi.data ? SSD1306_VIRT_DATA : SSD1306_VIRT_INSTRUCTION;
 			} else {

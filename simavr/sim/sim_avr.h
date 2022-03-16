@@ -549,6 +549,10 @@ avr_get_time_stamp(
 
 const char * avr_regname(avr_t *avr, uint16_t reg);
 
+/* Use this in preference to abort() so that log or debug gets to files. */
+
+extern void avr_abort(void);
+
 #ifdef __cplusplus
 };
 #endif

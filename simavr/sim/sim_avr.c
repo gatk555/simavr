@@ -293,6 +293,15 @@ avr_set_console_register(
 		avr_register_io_write(avr, addr, _avr_io_console_write, NULL);
 }
 
+/* Use this in preference to abort() so that log or debug gets to files. */
+
+void avr_abort(void)
+{
+	fflush(stdout);
+	fflush(stderr);
+	abort();
+}
+
 void
 avr_loadcode(
 		avr_t * avr,
@@ -303,7 +312,7 @@ avr_loadcode(
 	if ((address + size) > avr->flashend+1) {
 		AVR_LOG(avr, LOG_ERROR, "avr_loadcode(): Attempted to load code of size %d but flash size is only %d.\n",
 			size, avr->flashend + 1);
-		abort();
+		avr_abort();
 	}
 	memcpy(avr->flash + address, code, size);
 }
