@@ -144,11 +144,13 @@ and
 <I>reset</I>
 are supported.
 <P>
-This fork has added support for the standard avr-gcc command,
+This fork has added support for the standard avr-gcc commands
 <PRE>
+  load
   info io_registers
 </PRE>
-for displaying I/O register names and values and
+for loading flash memory from a file and for
+displaying I/O register names and values. Also
 <PRE>
   monitor ior hex-base-address register-count
 </PRE>
@@ -169,7 +171,7 @@ In some cases there is no other way to set them.
 These options include peripheral tracing details, VCD file tracing details,
 some analogue voltage inputs and others.
 Details are in the file
-<I>simavr/simavr/sim/avr/avr_mcus_ection.h.</I>
+<I>simavr/simavr/sim/avr/avr_mcu_section.h.</I>
 
 <H4 id="panel">Interactive <I>run-avr</I>.</H4>
 The version of

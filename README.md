@@ -2,18 +2,22 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (January 2022) this fork contains some new or updated items.
+At the time of writing (March 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
-+ Support for avr-gdb's 'info io_registers' command.
++ Support for avr-gdb's 'load' and 'info io_registers' commands.
 + ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
++ Changes intended to help to add new core types, such as the ATmega4809.
++ The GPIO pull-up code is conditionally compiled.
 + Some Pull Requests that are not yet integrated upstream may be included.
 + Miscellaneous bug fixes.
 
+Some of these changes are available as upstream Pull Requests.
+<P>
 There is an additional library dependency, libdwarf, that extracts
 debugging information from ELF files, including register names and source
 code line numbers.
@@ -175,11 +179,13 @@ and
 <I>reset</I>
 are supported.
 <P>
-This fork has added support for the standard avr-gcc command,
+This fork has added support for the standard avr-gcc commands
 <PRE>
+  load
   info io_registers
 </PRE>
-for displaying I/O register names and values and
+for loading flash memory from a file and for
+displaying I/O register names and values. Also
 <PRE>
   monitor ior hex-base-address register-count
 </PRE>
