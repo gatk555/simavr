@@ -11,7 +11,7 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
-+ Changes intended to help to add new core types, such as the ATmega4809.
++ Changes intended to help to add newer core types, such as the ATmega4809.
 + The GPIO pull-up code is conditionally compiled.
 + Some Pull Requests that are not yet integrated upstream may be included.
 + Miscellaneous bug fixes.
