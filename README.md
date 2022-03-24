@@ -14,9 +14,22 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + Changes intended to help to add newer core types, such as the ATmega4809.
 + The GPIO pull-up code is conditionally compiled.
 + Some Pull Requests that are not yet integrated upstream may be included.
++ The old AVR header files have been removed.
 + Miscellaneous bug fixes.
 
 Some of these changes are available as upstream Pull Requests.
+<P>
+Because the old AVR header files have been removed, it is necessary to create
+a link,
+<I>simavr/simavr/cores/avr</I>
+to the set that come with
+<I>avr-libc.</I>
+The target directory should be the one containing
+<I>io.h.</I>
+(On Windows, the
+<I>mklink</I>
+command creates symbolic links.)
+Alternatively, copy the header files into a subdirectory.
 <P>
 There is an additional library dependency, libdwarf, that extracts
 debugging information from ELF files, including register names and source
