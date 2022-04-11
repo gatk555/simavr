@@ -1,4 +1,4 @@
-This repository is a fork from the original [here.](https://github.com/buserror/simavr)
+This repository is a fork from the original [here.](https://github.com/buserror/simavr).  This branch is obsolete, replaced by the "main" branch of the repository.
 
 New Features
 ------------
