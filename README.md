@@ -2,12 +2,11 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (March 2022) this fork contains some new or updated items.
+At the time of writing (April 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
-+ Support for avr-gdb's 'load' and 'info io_registers' commands.
 + ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
@@ -192,7 +191,7 @@ and
 <I>reset</I>
 are supported.
 <P>
-This fork has added support for the standard avr-gcc commands
+There is support for the standard avr-gdb commands
 <PRE>
   load
   info io_registers
