@@ -122,6 +122,7 @@ main(
 #ifdef CONFIG_SIMAVR_TRACE
 	int trace = 0;
 #endif //CONFIG_SIMAVR_TRACE
+
 #ifdef CONFIG_PANEL
         int panel = 0;
 #endif // CONFIG_PANEL
