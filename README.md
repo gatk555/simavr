@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (April 2022) this fork contains some new or updated items.
+At the time of writing (May 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -16,7 +16,7 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + The old AVR header files have been removed.
 + Miscellaneous bug fixes.
 
-Some of these changes are available as upstream Pull Requests.
+Some of these changes may be available as upstream Pull Requests.
 <P>
 Because the old AVR header files have been removed, it is necessary to create
 a link,
@@ -53,19 +53,16 @@ variable names have been added to instruction tracing output:
 <H3>Getting Started with Simavr. </H3>
 This is a guide to getting started with,
 <A href="https://github.com/buserror/simavr">
-<I>simavr</I>
+<I>simavr,</I>
 </A>
 "a lean and mean Atmel AVR simulator".
 It is intended as a supplement to the existing documentation
 and describes how to load and run AVR firmware in the simulator
 and how to begin writing code that simulates the rest of your circuit.
 <P>
-You are assumed to be familiar with downloading and building
-open-source software.
-If not, specific instructions for
-<I>simavr</I>
-can be found in the PDF manual or the Bulid Guide page of the github Wiki.
-Before you start you will need the ELF library,
+Before using
+<I>simavr,</I>
+you will need the ELF library,
 <I>libelf</I>
 and an AVR toolchain (programs for building AVR programs).
 The preferred toolchain is
@@ -74,6 +71,13 @@ but anything that can produce Intel HEX files should work.
 If using <I>gcc-avr</I> with C or C++,
 you will also probably need the C library,
 <I>avr-libc.</I>
+<P>
+Instructions for building
+<I>simavr</I>
+from source can be found in the PDF manual or
+the Bulid Guide page of the github Wiki.
+Updated instructions for Windows are
+<A href="https://github.com/maxgerhardt/simavr">here.</A>
 <P>
 Suppose you have downloaded and (if necessary) built simavr.
 Now what?
@@ -87,7 +91,7 @@ The tree also contains some examples of using the library
 and some tests to verify that simavr is working properly.
 This guide is mostly an introduction to the library.
 
-<H4>Using <I>run-avr</I>.</H4>
+<H4 id="using">Using <I>run-avr</I>.</H4>
 An easy way to get your firmware compiled and running
 with <I>gcc-avr</I> is to create a new sub-directory of
 <I>simavr/examples</I>
@@ -136,8 +140,43 @@ They are both larger graphical circuit designer/emulator that include simavr
 as a component and have various input devices whose actions can be captured
 as VCD files.
 <P>
-VCD input files used for input must follow a convention for variable names
-that match the
+The filename and included items for VCD output may be specified
+<A href="#mmcu">in the firmware,</A>
+by function calls
+(<I>sim_vcd_file.h</I>)
+or by the
+<I>--add_trace</I>
+option of
+<I>run_avr.</I>
+The option value contains a name for the traced item, a keyword
+and two hexadecimal numbers in the form
+<I>name=kind@addr/mask</I>.
+For example,
+<PRE>
+  --add-trace ucsr0a=trace@0xc0/0xff
+</PRE>
+will add a trace named "ucsr0a" on the register at address 0xc0.
+There are three keywords: for
+<I>trace</I>
+the parameters are an address and a mask to set which bits will be traced;
+for
+<I>portpin</I>
+a GPIO port pin number and the capital letter that identifies the port;
+and for
+<I>irq</I>
+an interrupt event index and an interrupt vector number.
+The event index is 0 for interrupt pending events
+(the interrupt is enabled and raised)
+or 1 for interrupt handler execution.
+So
+<PRE>
+  --add-trace pwm=portpin@0x2/0x42 --add-trace interrupt=irq@0x1/0x3
+</PRE>
+will trace the state of pin 2 on port B, and execution of the
+interrupt handler for vector 3.
+<P>
+VCD files for input must follow a convention for variable names
+so that they match the
 <I>printf()</I>
 format
 <I>"%c%c%c%c_%d".</I>
@@ -159,7 +198,7 @@ that already follow simavr's rules.
 The simulator has support for debugging firmware with the AVR version
 of the GNU debugger,
 <I>avr-gdb.</I>
-Simply run
+Simply start
 <I>run_avr</I>
 as usual, with the extra option
 <I>--gdb</I>
@@ -209,7 +248,7 @@ Several
 <I>monitor</I>
 sub-commands can be combined on one line.
 
-<H4>Options in firmware.</H4>
+<H4 id="mmcu">Options in firmware.</H4>
 A slightly unusual feature of
 <I>simavr</I>
 is that options for the simulator can be specified by macro calls
@@ -218,7 +257,8 @@ In some cases there is no other way to set them.
 These options include peripheral tracing details, VCD file tracing details,
 some analogue voltage inputs and others.
 Details are in the file
-<I>simavr/simavr/sim/avr/avr_mcu_section.h.</I>
+<I>simavr/simavr/sim/avr/avr_mcu_section.h</I>
+and the included example firmware programs show how the macros can be used.
 
 <H4 id="panel">Interactive <I>run-avr</I>.</H4>
 The version of
@@ -298,26 +338,20 @@ That is how the control panel was implemented.
 Because an ELF firmware file can contain parameters for the simulator,
 the first step is to read the file:
 <PRE>
-	elf_firmware_t  fw = {{0}};  //  Must be initialised,
-        char           *firmware;
+	elf_firmware_t  fw = {};  //  Must be initialised,
+	char           *firmware;
 
-	if (elf_read_firmware(firmware_file_name, &fw)) {
-	    // Handle failure here
+	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
 </PRE>
-The procedure for a HEX file is slightly more complicated.
-The code can be found in run_avr.c, or in the gatk555 fork
-there is a function
-<I>sim_setup_firmware()</I>
-declared in
-<I>simavr/simavr/sim/sim_hex.h</I>
-that handles both file formats.
-When using HEX format, the
+An ELF file is assumed, unless the file name ends ".hex".
+When using ihex format, the
 <I>elf_firmware_t</I>
-structure must then be further initialiased with the name and clock frequency
-of the specific AVR part:
+structure should be be further initialiased with the name and clock frequency
+of the specific AVR part before the function call:
 <PRE>
 	strcpy(fw.mmcu, name);
 	fw.frequency = f_cpu;
+	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
 </PRE>
 With the firmware prepared for loading, the next step is to create
 the simulated microcontroller and load the firmware:
