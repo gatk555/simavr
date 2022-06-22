@@ -54,7 +54,7 @@ struct ctx {
 
     // Error handling.
 
-    jmp_buf             err_jmp;
+    sigjmp_buf          err_jmp;
 };
 
 static void error(char *fn, Dwarf_Error err)
