@@ -48,12 +48,12 @@ static void
 elf_set_preferred(const char **sp, const char *new)
 {
 	if (*sp) {
-		char c;
+		const char *prev;
 
-		// Replace duplicates beginning '_'.
+		// Replace duplicates definitions beginning '_' and '__'.
 
-		c = **sp;
-		if (c != '_' && c)
+		prev = *sp;
+		if (prev[0] && (prev[0] != '_' || (new[0] == '_' && prev[1] != '_')))
 			return;
 
 		// Most of array already leaks - FIXME
