@@ -115,7 +115,9 @@ avr_vcd_input_parse_line(
 				a++;
 			}
 		} else if (*a == '0' || *a == '1' || *a == 'x' || *a == 'z') {
-			if (*a == 'x' || *a == 'z')
+			if (*a == 'x')
+				continue;	// Schmidt trigger on input preserves state.
+			if (*a == 'z')
 				floating = 1;
 			else
 				val = *a++ - '0';
@@ -388,7 +390,7 @@ _avr_vcd_get_float_signal_text(
 		*dst++ = 'b';
 
 	for (int i = s->size; i > 0; i--)
-		*dst++ = 'x';
+		*dst++ = 'z';
 	if (s->size > 1)
 		*dst++ = ' ';
 	*dst++ = s->alias;
