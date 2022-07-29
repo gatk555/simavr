@@ -687,17 +687,6 @@ avr_timer_write(
 	// this prevent the timer reset when changing the edge detector
 	// or other minor bits
 	if (new_cs != cs || new_mode != mode || new_as2 != as2) {
-	/* cs */
-		if (new_cs == 0) {
-			p->cs_div_value = 0;		// reset prescaler
-			// cancel everything
-			avr_timer_cancel_all_cycle_timers(avr, p, 1);
-
-			AVR_LOG(avr, LOG_TRACE, "TIMER: %s-%c clock turned off\n",
-					__func__, p->name);
-			return;
-		}
-
 		p->ext_clock_flags &= ~(AVR_TIMER_EXTCLK_FLAG_TN | AVR_TIMER_EXTCLK_FLAG_EDGE
 								| AVR_TIMER_EXTCLK_FLAG_AS2 | AVR_TIMER_EXTCLK_FLAG_STARTED);
 		if (p->ext_clock_pin.reg
@@ -713,12 +702,23 @@ avr_timer_write(
 			}
 		}
 
-	/* mode */
+		/* mode */
 		p->mode = p->wgm_op[new_mode];
 		p->wgm_op_mode_kind = p->mode.kind;
 		p->wgm_op_mode_size = (1 << p->mode.size) - 1;
 
-		avr_timer_reconfigure(p, 1);
+		/* cs */
+		if (new_cs == 0) {
+			p->cs_div_value = 0;		// reset prescaler
+			// cancel everything
+			avr_timer_cancel_all_cycle_timers(avr, p, 1);
+			if (cs != 0) {
+				AVR_LOG(avr, LOG_TRACE, "TIMER: %s-%c clock turned off\n",
+						__func__, p->name);
+			}
+		} else {
+			avr_timer_reconfigure(p, 1);
+		}
 	}
 }
 
