@@ -88,7 +88,6 @@ typedef struct avr_timer_wgm_t {
 #define AVR_TIMER_EXTCLK_CHOOSE 0x80		// marker value for cs_div specifying ext clock selection
 #define AVR_TIMER_EXTCLK_FLAG_TN 0x80		// Tn external clock chosen
 #define AVR_TIMER_EXTCLK_FLAG_STARTED 0x40	// peripheral started
-#define AVR_TIMER_EXTCLK_FLAG_REVDIR 0x20	// reverse counting (decrement)
 #define AVR_TIMER_EXTCLK_FLAG_AS2 0x10		// asynchronous external clock chosen
 #define AVR_TIMER_EXTCLK_FLAG_VIRT 0x08		// don't use the input pin, generate clock internally
 #define AVR_TIMER_EXTCLK_FLAG_EDGE 0x01		// use the rising edge
@@ -115,13 +114,12 @@ typedef struct avr_timer_comp_t {
 		avr_regbit_t		com;			// comparator output mode registers
 		avr_regbit_t		com_pin;		// where comparator output is connected
 		uint64_t			comp_cycles;
-                avr_regbit_t            foc;                    // "force compare match" strobe
+	    avr_regbit_t        foc;            // "force compare match" strobe
 } avr_timer_comp_t, *avr_timer_comp_p;
 
 enum {
 	avr_timer_trace_ocr		= (1 << 0),
 	avr_timer_trace_tcnt	= (1 << 1),
-
 	avr_timer_trace_compa 	= (1 << 8),
 	avr_timer_trace_compb 	= (1 << 9),
 	avr_timer_trace_compc 	= (1 << 10),
@@ -149,6 +147,8 @@ typedef struct avr_timer_t {
 	uint32_t		cs_div_value;
 
 	avr_regbit_t	ext_clock_pin;	// external clock input pin, to link IRQs
+	uint8_t			down;           // Counting down
+	uint8_t			bottom;         // Counted down to bottom
 	uint8_t			ext_clock_flags;	// holds AVR_TIMER_EXTCLK_FLAG_ON, AVR_TIMER_EXTCLK_FLAG_EDGE and other ext. clock mode flags
 	float			ext_clock;	// external clock frequency, e.g. 32768Hz
 

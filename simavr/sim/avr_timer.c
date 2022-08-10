@@ -89,10 +89,41 @@ avr_timer_comp(
 	uint32_t    flags = (have_pin) ? AVR_IOPORT_OUTPUT : 0;
 
 	AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);
-	if (have_pin && mode != avr_timer_com_normal)
-		avr->timer_cycle = when;	// Record event time.
 
-	switch (mode) {
+	switch (p->wgm_op_mode_kind) {
+	case avr_timer_wgm_fc_pwm:
+		switch (mode) {
+		case avr_timer_com_normal: // Normal mode OCnA disconnected
+			break;
+		case avr_timer_com_toggle: // Toggle OCnA on compare match
+			if (comp != 0 || p->mode.top == avr_timer_wgm_reg_constant ||
+				!have_pin) {
+				/* Datasheet (Megax4) says OC1B reserved - ignore pin. */
+
+				avr_raise_irq(irq, irq->value ? 0 : 1);
+				break;
+			}
+
+			/* Tiny84 toggles for all modes here, but Megax4 does it only
+			 * when TOP is OCRnA.
+			 */
+
+			avr_raise_irq(irq,
+						flags |
+						(avr_regbit_get(avr, p->comp[comp].com_pin) ? 0 : 1));
+			break;
+		case avr_timer_com_clear:
+			// Inverted phase-correct.
+			avr_raise_irq(irq, flags | p->down);
+			break;
+		case avr_timer_com_set:
+			// Normal phase-correct.
+			avr_raise_irq(irq, flags | !p->down);
+			break;
+		}
+		break;
+	default:
+		switch (mode) {
 		case avr_timer_com_normal: // Normal mode OCnA disconnected
 			break;
 		case avr_timer_com_toggle: // Toggle OCnA on compare match
@@ -101,8 +132,7 @@ avr_timer_comp(
 						flags |
 						(avr_regbit_get(avr, p->comp[comp].com_pin) ? 0 : 1));
 			else // no pin, toggle the IRQ anyway
-				avr_raise_irq(irq,
-						p->io.irq[TIMER_IRQ_OUT_COMP + comp].value ? 0 : 1);
+				avr_raise_irq(irq, irq->value ? 0 : 1);
 			break;
 		case avr_timer_com_clear:
 			avr_raise_irq(irq, flags | 0);
@@ -110,7 +140,11 @@ avr_timer_comp(
 		case avr_timer_com_set:
 			avr_raise_irq(irq, flags | 1);
 			break;
+		}
 	}
+
+	if (have_pin && mode != avr_timer_com_normal)
+		avr->timer_cycle = when;	// Record event time.
 
 	return p->tov_cycles ? 0 :
 				p->comp[comp].comp_cycles ?
@@ -235,17 +269,17 @@ avr_timer_irq_ext_clock(
 	switch (p->wgm_op_mode_kind) {
 		case avr_timer_wgm_fc_pwm:	// in the avr_timer_write_ocr comment "OCR is not used here" - why?
 		case avr_timer_wgm_pwm:
-			if ((p->ext_clock_flags & AVR_TIMER_EXTCLK_FLAG_REVDIR) != 0) {
+			if (p->down != 0) {
 				--p->tov_base;
 				if (p->tov_base == 0) {
 					// overflow occured
-					p->ext_clock_flags &= ~AVR_TIMER_EXTCLK_FLAG_REVDIR; // restore forward count direction
+					p->down = 0; // restore forward count direction
 					overflow = 1;
 				}
 			}
 			else {
 				if (++p->tov_base >= p->tov_top) {
-					p->ext_clock_flags |= AVR_TIMER_EXTCLK_FLAG_REVDIR; // prepare to count down
+					p->down = 1; // prepare to count down
 				}
 			}
 			break;
@@ -293,7 +327,44 @@ avr_timer_irq_ext_clock(
 
 }
 
-// timer overflow
+// Map of compare action functions. 
+
+static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
+	{ avr_timer_compa, avr_timer_compb, avr_timer_compc };
+
+// Called at BOTTOM in dual-slope modes.  Raise TOV and schedule.
+
+static avr_cycle_count_t
+avr_timer_bottom(
+		struct avr_t * avr,
+		avr_cycle_count_t when,
+		void * param)
+{
+	avr_timer_t * p = (avr_timer_t *)param;
+
+	p->down = 0;
+	p->bottom = 1;
+	avr_raise_interrupt(avr, &p->overflow);
+
+	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+		if (p->comp[compi].comp_cycles) {
+			avr_cycle_timer_register(avr, p->comp[compi].comp_cycles,
+									 dispatch[compi], p);
+		}
+	}
+	return 0;
+}
+
+// This function is called at TOP, triggering overflow actions for
+// single-slope modes and setting cycle timers for the next round
+// of output compares.  For dual-slope modes it schedules the
+// BOTTOM timer that does the overflow.
+//
+// Also handle fraction cycles with external/async clocking.
+//
+// The condition (p->tov_base == 0) indicates a magical call
+// to get things started on (re)configuration.
+
 static avr_cycle_count_t
 avr_timer_tov(
 		struct avr_t * avr,
@@ -304,38 +375,53 @@ avr_timer_tov(
 	int start = p->tov_base == 0;
 
 	avr_cycle_count_t next = when;
-	if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 | AVR_TIMER_EXTCLK_FLAG_TN)) != 0)
-			&& (p->tov_cycles_fract != 0.0f)) {
-		p->phase_accumulator += p->tov_cycles_fract;
-		if (p->phase_accumulator >= 1.0f) {
-			++next;
-			p->phase_accumulator -= 1.0f;
-		} else if (p->phase_accumulator <= -1.0f) {
-			--next;
-			p->phase_accumulator += 1.0f;
+	if (!start) {
+		if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 |
+									AVR_TIMER_EXTCLK_FLAG_TN)) != 0) &&
+			(p->tov_cycles_fract != 0.0f)) {
+			p->phase_accumulator += p->tov_cycles_fract;
+			if (p->phase_accumulator >= 1.0f) {
+				++next;
+				p->phase_accumulator -= 1.0f;
+			} else if (p->phase_accumulator <= -1.0f) {
+				--next;
+				p->phase_accumulator += 1.0f;
+			}
+		}
+
+		if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm) {
+			avr_cycle_count_t down_cycles;
+
+			p->down = 1;
+			down_cycles = (p->tov_top - 1) * p->cs_div_value;
+			avr_cycle_timer_register(avr, down_cycles, avr_timer_bottom, p);
+		} else {
+			avr_raise_interrupt(avr, &p->overflow);
 		}
 	}
-
-	if (!start)
-		avr_raise_interrupt(avr, &p->overflow);
 	p->tov_base = when;
-
-	static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
-		{ avr_timer_compa, avr_timer_compb, avr_timer_compc };
 
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
 		if (p->comp[compi].comp_cycles) {
-			if (p->comp[compi].comp_cycles < p->tov_cycles && p->comp[compi].comp_cycles >= (avr->cycle - when)) {
+			if (p->comp[compi].comp_cycles < p->tov_cycles &&
+				p->comp[compi].comp_cycles >= (avr->cycle - when)) {
+				avr_cycle_count_t next_match;
+
 				avr_timer_comp_on_tov(p, when, compi);
-				avr_cycle_timer_register(avr,
-					p->comp[compi].comp_cycles - (avr->cycle - next),
-					dispatch[compi], p);
-			} else if (p->tov_cycles == p->comp[compi].comp_cycles && !start)
+				if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm && !start)
+					next_match = p->tov_cycles - p->comp[compi].comp_cycles;
+				else
+					next_match = p->comp[compi].comp_cycles -
+						(avr->cycle - next);
+				avr_cycle_timer_register(avr, next_match, dispatch[compi], p);
+			} else if (p->tov_cycles == p->comp[compi].comp_cycles && !start) {
 				dispatch[compi](avr, when, param);
+			}
 		}
 	}
 
-	return next + p->tov_cycles;
+	return next +
+		(p->down ? (2 * p->tov_top * p->cs_div_value) : p->tov_cycles);
 }
 
 static uint16_t
@@ -343,18 +429,31 @@ _avr_timer_get_current_tcnt(
 		avr_timer_t * p)
 {
 	avr_t * avr = p->io.avr;
-	if (!(p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_TN | AVR_TIMER_EXTCLK_FLAG_AS2)) ||
+
+	if (!(p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_TN |
+								AVR_TIMER_EXTCLK_FLAG_AS2)) ||
 			(p->ext_clock_flags & AVR_TIMER_EXTCLK_FLAG_VIRT)
-			) {
+		) {
 		if (p->tov_cycles) {
 			uint64_t when = avr->cycle - p->tov_base;
 
-			return (when * (((uint32_t)p->tov_top)+1)) / p->tov_cycles;
+			when = when /  p->cs_div_value;
+			if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm) {
+				if (p->down) {
+					// p->tov_base was reset at top.
+
+					return p->tov_top - when - 1;
+				} else if (p->bottom) {
+					return when - p->tov_top + 1;
+				} else {
+					return when;
+				}
+			} else {
+				return when % (p->tov_top + 1);
+			}				
 		}
-	}
-	else {
-		if (p->tov_top)
-			return p->tov_base;
+	} else {
+		return p->tov_base;
 	}
 	return 0;
 }
@@ -389,8 +488,8 @@ avr_timer_cancel_all_cycle_timers(
 		timer->tov_cycles = 0;
 	}
 
-
 	avr_cycle_timer_cancel(avr, avr_timer_tov, timer);
+	avr_cycle_timer_cancel(avr, avr_timer_bottom, timer);
 	avr_cycle_timer_cancel(avr, avr_timer_compa, timer);
 	avr_cycle_timer_cancel(avr, avr_timer_compb, timer);
 	avr_cycle_timer_cancel(avr, avr_timer_compc, timer);
@@ -584,6 +683,8 @@ avr_timer_reconfigure(
 			break;
 		case avr_timer_wgm_fc_pwm:
 			avr_timer_configure(p, p->cs_div_value, p->wgm_op_mode_size, reset);
+			p->down = 0;
+			p->bottom = 0;
 			break;
 		case avr_timer_wgm_ctc: {
 			avr_timer_configure(p, p->cs_div_value, _timer_get_ocr(p, AVR_TIMER_COMPA), reset);
@@ -885,9 +986,11 @@ avr_timer_reset(
 		//printf("%s-%c ICP Connecting PIN IRQ %d\n", __func__, p->name, req.irq[0]->irq);
 		avr_connect_irq(req.irq[0], port->irq + TIMER_IRQ_IN_ICP);
 	}
-	p->ext_clock_flags &= ~(AVR_TIMER_EXTCLK_FLAG_STARTED | AVR_TIMER_EXTCLK_FLAG_TN |
-							AVR_TIMER_EXTCLK_FLAG_AS2 | AVR_TIMER_EXTCLK_FLAG_REVDIR);
-
+	p->ext_clock_flags &= ~(AVR_TIMER_EXTCLK_FLAG_STARTED |
+							AVR_TIMER_EXTCLK_FLAG_TN |
+							AVR_TIMER_EXTCLK_FLAG_AS2);
+	p->down = 0;
+	p->bottom = 0;
 }
 
 static const char * irq_names[TIMER_IRQ_COUNT] = {
