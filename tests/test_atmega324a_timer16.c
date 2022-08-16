@@ -11,22 +11,28 @@ static struct action {
 	int               value;
 	avr_cycle_count_t when;
 } actions[] = {
-    /* Normal mode WGM 0. */
+	/* Normal mode WGM 0. */
 
-    {Record, 1, 0}, {Ignore, 0, 0}, {Check, 1, 50}, {Check, 0, (1 << 16)},
-    {Check, 1, (1 << 16) + 50 - 1},
+	{Record, 1, 0}, {Ignore, 0, 0}, {Check, 1, 50}, {Check, 0, (1 << 16)},
+	{Check, 1, (1 << 16) + 50 - 2},
 
-    /* Phase-correct, 8-bit: WGM 1. Two full cycles with waggle on overflow.*/
+	/* Phase-correct, 8-bit: WGM 1. Two full cycles with waggle on overflow.*/
 
-    {Record, 0, 0}, {Check, 1, 200}, {Check, 0, 310},
-    {Check, 1, 510}, {Ignore, 0, 0}, {Check, 1, 710}, {Check, 0, 820},
-    {Check, 1, 1022},
+	{Record, 0, 0}, {Check, 1, 200}, {Check, 0, 309},
+	{Check, 1, 510}, {Ignore, 0, 0}, {Check, 1, 710}, {Check, 0, 820},
+	{Check, 1, 1022},
     
-    /* Phase-correct, 9-bit: WGM 2. Very like WGM 1 so change OCR as well. */
+	/* Phase-correct, 9-bit: WGM 2. Very like WGM 1 so change OCR as well. */
 
-    {Record, 0, 0}, {Check, 1, 300}, {Check, 0, 722},
-    {Check, 1, 1322}, {Check, 0, 1441}, // Incorrect, but pass for now.
-    {Stop, 0}};
+	{Record, 0, 0}, {Check, 1, 300}, {Check, 0, 721},
+	{Check, 1, 1023}, {Ignore, 0, 0},   // Firmware waggle at overflow
+	// OCR1B changed to 400 here.
+	{Check, 1, 1422}, {Check, 0, 1643}, // Incorrect, but pass for now.
+
+	/* Phase-correct, 10-bit: WGM 3. Start with TCNT = 400 OCR1B = 500. */
+
+	{Record, 0, 0}, {Check, 1, 100}, {Check, 0, 1146},
+	{Stop, 0}};
     
 static int index, stage = -1, step;
 

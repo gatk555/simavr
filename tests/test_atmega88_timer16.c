@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
 	default:
 		fail("This should not be reached; reason=%d", reason);
 	}
-	tests_assert_cycles_between(12500000, 12500300);
+	tests_assert_cycles_between(12200000, 12500300);
 	tests_success();
 	return 0;
 }

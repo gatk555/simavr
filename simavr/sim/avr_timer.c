@@ -347,6 +347,8 @@ avr_timer_bottom(
 	avr_raise_interrupt(avr, &p->overflow);
 
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+		if (p->comp[compi].r_ocr == 0)
+			break;
 		if (p->comp[compi].comp_cycles) {
 			avr_cycle_timer_register(avr, p->comp[compi].comp_cycles,
 									 dispatch[compi], p);
@@ -361,9 +363,6 @@ avr_timer_bottom(
 // BOTTOM timer that does the overflow.
 //
 // Also handle fraction cycles with external/async clocking.
-//
-// The condition (p->tov_base == 0) indicates a magical call
-// to get things started on (re)configuration.
 
 static avr_cycle_count_t
 avr_timer_tov(
@@ -372,32 +371,30 @@ avr_timer_tov(
 		void * param)
 {
 	avr_timer_t * p = (avr_timer_t *)param;
-	int start = p->tov_base == 0;
 
 	avr_cycle_count_t next = when;
-	if (!start) {
-		if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 |
-									AVR_TIMER_EXTCLK_FLAG_TN)) != 0) &&
-			(p->tov_cycles_fract != 0.0f)) {
-			p->phase_accumulator += p->tov_cycles_fract;
-			if (p->phase_accumulator >= 1.0f) {
-				++next;
-				p->phase_accumulator -= 1.0f;
-			} else if (p->phase_accumulator <= -1.0f) {
-				--next;
-				p->phase_accumulator += 1.0f;
-			}
-		}
+	if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 |
+								AVR_TIMER_EXTCLK_FLAG_TN)) != 0) &&
+		(p->tov_cycles_fract != 0.0f)) {
+		/* Not using core clock: handle accumulated fractional cycles. */
 
-		if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm) {
-			avr_cycle_count_t down_cycles;
-
-			p->down = 1;
-			down_cycles = (p->tov_top - 1) * p->cs_div_value;
-			avr_cycle_timer_register(avr, down_cycles, avr_timer_bottom, p);
-		} else {
-			avr_raise_interrupt(avr, &p->overflow);
+		p->phase_accumulator += p->tov_cycles_fract;
+		if (p->phase_accumulator >= 1.0f) {
+			++next;
+			p->phase_accumulator -= 1.0f;
+		} else if (p->phase_accumulator <= -1.0f) {
+			--next;
+			p->phase_accumulator += 1.0f;
 		}
+	}
+	if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm) {
+		avr_cycle_count_t down_cycles;
+
+		p->down = 1;
+		down_cycles = (p->tov_top - 1) * p->cs_div_value;
+		avr_cycle_timer_register(avr, down_cycles, avr_timer_bottom, p);
+	} else {
+		avr_raise_interrupt(avr, &p->overflow);
 	}
 	p->tov_base = when;
 
@@ -408,13 +405,13 @@ avr_timer_tov(
 				avr_cycle_count_t next_match;
 
 				avr_timer_comp_on_tov(p, when, compi);
-				if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm && !start)
+				if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm)
 					next_match = p->tov_cycles - p->comp[compi].comp_cycles;
 				else
 					next_match = p->comp[compi].comp_cycles -
 						(avr->cycle - next);
 				avr_cycle_timer_register(avr, next_match, dispatch[compi], p);
-			} else if (p->tov_cycles == p->comp[compi].comp_cycles && !start) {
+			} else if (p->tov_cycles == p->comp[compi].comp_cycles) {
 				dispatch[compi](avr, when, param);
 			}
 		}
@@ -430,6 +427,8 @@ _avr_timer_get_current_tcnt(
 {
 	avr_t * avr = p->io.avr;
 
+	if (p->wgm_op_mode_kind == avr_timer_wgm_none)
+		return _timer_get_tcnt(p);
 	if (!(p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_TN |
 								AVR_TIMER_EXTCLK_FLAG_AS2)) ||
 			(p->ext_clock_flags & AVR_TIMER_EXTCLK_FLAG_VIRT)
@@ -449,7 +448,7 @@ _avr_timer_get_current_tcnt(
 					return when;
 				}
 			} else {
-				return when % (p->tov_top + 1);
+				return when;
 			}				
 		}
 	} else {
@@ -495,6 +494,59 @@ avr_timer_cancel_all_cycle_timers(
 	avr_cycle_timer_cancel(avr, avr_timer_compc, timer);
 }
 
+/* Start things off, or restart after a register write. */
+
+static void
+avr_timer_start(avr_timer_t *p)
+{
+	struct avr_t *avr = p->io.avr;
+	uint32_t      when, adj;
+	uint16_t      tcnt, to_top;
+
+	tcnt = _avr_timer_get_current_tcnt(p);
+	if (p->cs_div_value > 1)
+		adj = (avr->cycle - p->tov_base) % p->cs_div_value;
+	else
+		adj = 0;
+
+	if (p->down) {
+		/* Count down to zero and restart. */
+
+		when = (tcnt + 1) * p->cs_div_value;
+		avr_cycle_timer_register(avr, when - adj, avr_timer_bottom, p);
+		to_top = tcnt + p->tov_top;
+	} else {
+		if (tcnt >= p->tov_top) {
+			/* Count to overflow. */
+
+			to_top = (1 << p->mode.size) - tcnt;
+		} else {
+			to_top = p->tov_top + 1 - tcnt;
+		}
+	}
+	to_top *= p->cs_div_value;
+	avr_cycle_timer_register(avr, to_top - adj, avr_timer_tov, p);
+
+	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+		uint16_t match;
+
+		if (p->comp[compi].r_ocr == 0)
+			break;
+		match = _timer_get_ocr(p, compi);
+		if (tcnt < match && !p->down) {
+			when = (match + 1 - tcnt) * p->cs_div_value;
+			when -= adj;
+			avr_cycle_timer_register(avr, when, dispatch[compi], p);
+		} else if (tcnt > match && p->down) {
+			when = (tcnt - match + 1) * p->cs_div_value;
+			when -= adj;
+			avr_cycle_timer_register(avr, when, dispatch[compi], p);
+		} else {
+			avr_cycle_timer_cancel(avr, dispatch[compi], p);
+		}
+	}
+}
+
 static void
 avr_timer_tcnt_write(
 		struct avr_t * avr,
@@ -506,13 +558,8 @@ avr_timer_tcnt_write(
 	avr_core_watch_write(avr, addr, v);
 	uint16_t tcnt = _timer_get_tcnt(p);
 
-	if (!p->tov_top)
-		return;
-
-	if (tcnt >= p->tov_top)
-		tcnt = 0;
-
-	if (!(p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_TN | AVR_TIMER_EXTCLK_FLAG_AS2)) ||
+	if (!(p->ext_clock_flags &
+		  (AVR_TIMER_EXTCLK_FLAG_TN | AVR_TIMER_EXTCLK_FLAG_AS2)) ||
 			(p->ext_clock_flags & AVR_TIMER_EXTCLK_FLAG_VIRT)
 			) {
 		// internal or virtual clock
@@ -523,16 +570,13 @@ avr_timer_tcnt_write(
 
 		avr_timer_cancel_all_cycle_timers(avr, p, 0);
 
-		uint64_t cycles = (tcnt * p->tov_cycles) / p->tov_top;
+		// Reset base to reflect new value.
 
-		//	printf("%s-%c %d/%d -- cycles %d/%d\n", __FUNCTION__, p->name, tcnt, p->tov_top, (uint32_t)cycles, (uint32_t)p->tov_cycles);
+		p->tov_base = avr->cycle - _timer_get_tcnt(p) * p->cs_div_value;
 
 		// this reset the timers bases to the new base
-		if (p->tov_cycles > 1) {
-			avr_cycle_timer_register(avr, p->tov_cycles - cycles, avr_timer_tov, p);
-			p->tov_base = 0;
-			avr_timer_tov(avr, avr->cycle - cycles, p);
-		}
+		if (p->tov_cycles > 1)
+			avr_timer_start(p);
 
 		//	tcnt = ((avr->cycle - p->tov_base) * p->tov_top) / p->tov_cycles;
 		//	printf("%s-%c new tnt derive to %d\n", __FUNCTION__, p->name, tcnt);
@@ -629,19 +673,9 @@ avr_timer_configure(
 
 	if (!use_ext_clock || virt_ext_clock) {
 		if (p->tov_cycles > 1) {
-			if (reset) {
-				avr_cycle_timer_register(avr, p->tov_cycles, avr_timer_tov, p);
-				// calling it once, with when == 0 tells it to arm the A/B/C timers if needed
-				p->tov_base = 0;
-				avr_timer_tov(avr, avr->cycle, p);
+			if (reset)
 				p->phase_accumulator = 0.0f;
-			} else {
-				uint64_t orig_tov_base = p->tov_base;
-				avr_cycle_timer_register(avr, p->tov_cycles - (avr->cycle - orig_tov_base), avr_timer_tov, p);
-				// calling it once, with when == 0 tells it to arm the A/B/C timers if needed
-				p->tov_base = 0;
-				avr_timer_tov(avr, orig_tov_base, p);
-			}
+			avr_timer_start(p);
 		}
 	} else {
 		if (reset)
@@ -788,6 +822,13 @@ avr_timer_write(
 	// this prevent the timer reset when changing the edge detector
 	// or other minor bits
 	if (new_cs != cs || new_mode != mode || new_as2 != as2) {
+		uint16_t tcnt = _avr_timer_get_current_tcnt(p);
+		uint32_t adj;
+
+		if (p->cs_div_value > 1)
+			adj = (avr->cycle - p->tov_base) % p->cs_div_value;
+		else
+			adj = 0;
 		p->ext_clock_flags &= ~(AVR_TIMER_EXTCLK_FLAG_TN | AVR_TIMER_EXTCLK_FLAG_EDGE
 								| AVR_TIMER_EXTCLK_FLAG_AS2 | AVR_TIMER_EXTCLK_FLAG_STARTED);
 		if (p->ext_clock_pin.reg
@@ -811,13 +852,19 @@ avr_timer_write(
 		/* cs */
 		if (new_cs == 0) {
 			p->cs_div_value = 0;		// reset prescaler
+			p->down = 0;
+			p->bottom = 0;
 			// cancel everything
 			avr_timer_cancel_all_cycle_timers(avr, p, 1);
+			p->wgm_op_mode_kind = avr_timer_wgm_none;
 			if (cs != 0) {
 				AVR_LOG(avr, LOG_TRACE, "TIMER: %s-%c clock turned off\n",
 						__func__, p->name);
 			}
 		} else {
+			// Set tov_base to reproduce current count.
+
+			p->tov_base = avr->cycle - (tcnt * p->cs_div_value) - adj;
 			avr_timer_reconfigure(p, 1);
 		}
 	}
@@ -1090,5 +1137,12 @@ avr_timer_init(
 	} else {
 		p->ext_clock_flags = 0;
 		p->ext_clock = 0.0f;
+	}
+
+	/* Ensure the size is known. */
+
+	for (int i = 0; i <  ARRAY_SIZE(p->wgm_op); ++i) {
+		if (p->wgm_op[i].size == 0)
+			p->wgm_op[i].size = p->r_tcnth ? 16 : 8;
 	}
 }

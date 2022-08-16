@@ -58,6 +58,7 @@ int main()
 
 	while (!(TIFR1 & _BV(OCF1B)))
 		;
+	TIFR1 = 0xff; // Clear flags.
 
 	// Busy-wait for overflow
 
@@ -109,13 +110,16 @@ int main()
 	PORTD &= ~_BV(PD4);   // Trigger monitor
 	TIFR1 = 0xff;         // Clear flags.
 
-	// Busy-wait for overflow, then match.
+	// Busy-wait for overflow, after 2 matches.
 
 	while (!(TIFR1 & _BV(TOV1)))
 		;
+	// Waggle for monitor
+
+	PORTD |= _BV(PD4);
+	PORTD &= ~_BV(PD4);
+
 	TIFR1 = 0xff;         // Clear flags.
-	while (!(TIFR1 & _BV(OCF1B)))
-		;
 
 	// Now change pulse width.
 
@@ -124,13 +128,27 @@ int main()
 
  	// Busy-wait again
 
-	TIFR1 = 0xff;         // Clear flags.
 	while (!(TIFR1 & _BV(TOV1)))
 		;
-	TIFR1 = 0xff;         // Clear flags.
-	while (!(TIFR1 & _BV(OCF1B)))
-		;
 	
+	/* Start phase-correct 10-bit. */
+
+	TCCR1B = 0;
+	// WGM = 3, PC, 10-bit
+	TCCR1A = _BV(WGM11) + _BV(WGM10) + _BV(COM1B1) + _BV(COM1B0);
+	OCR1BH = 1;           // Set to 500
+	OCR1BL = 244;         // Should take effect on overflow.
+	TCNT1H = 1;
+	TCNT1L = 144;         // Start with count of 400
+	TCCR1B = _BV(CS10);   // Restart counting
+	PORTD &= ~_BV(PD4);   // Trigger monitor
+	TIFR1 = 0xff;         // Clear flags.
+
+	// Busy-wait for overflow, after 2 matches.
+
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+
 	// Sleeping with interrupt off is interpreted by simavr as "exit please".
 
 	sleep_cpu();
