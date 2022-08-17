@@ -164,6 +164,7 @@ avr_timer_comp_on_tov(
 	uint8_t     mode = avr_regbit_get(avr, p->comp[comp].com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
     int         have_pin = p->comp[comp].com_pin.reg;	// Physical pin
+	uint32_t    flags = (have_pin) ? AVR_IOPORT_OUTPUT : 0;
 
 	// only PWM modes have special behaviour on overflow
 	if((p->wgm_op_mode_kind != avr_timer_wgm_pwm) &&
@@ -179,10 +180,10 @@ avr_timer_comp_on_tov(
 		case avr_timer_com_toggle: // toggle on compare match => on tov do nothing
 			break;
 		case avr_timer_com_clear: // clear on compare match => set on tov
-			avr_raise_irq(irq, 1);
+			avr_raise_irq(irq, flags | 1);
 			break;
 		case avr_timer_com_set: // set on compare match => clear on tov
-			avr_raise_irq(irq, 0);
+			avr_raise_irq(irq, flags | 0);
 			break;
 	}
 }
@@ -347,6 +348,31 @@ static void avr_timer_update_ocr(avr_timer_t * p)
 	}
 }
 
+// Adjust for clock rates not a multiple of CPU clock.
+
+static unsigned int avr_timer_cycle_adjust(avr_timer_t *p)
+{
+	avr_cycle_count_t adj = 0;
+
+	if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 |
+								AVR_TIMER_EXTCLK_FLAG_TN)) != 0) &&
+		(p->tov_cycles_fract != 0.0f)) {
+		/* Not using core clock: handle accumulated fractional cycles. */
+
+		p->phase_accumulator += p->tov_cycles_fract;
+		if (p->bottom) // Completed double cycle
+			p->phase_accumulator += p->tov_cycles_fract;
+		if (p->phase_accumulator >= 1.0f) {
+			++adj;
+			p->phase_accumulator -= 1.0f;
+		} else if (p->phase_accumulator <= -1.0f) {
+			--adj;
+			p->phase_accumulator += 1.0f;
+		}
+	}
+	return adj;
+}
+
 // Map of compare action functions. 
 
 static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
@@ -361,7 +387,9 @@ avr_timer_bottom(
 		void * param)
 {
 	avr_timer_t * p = (avr_timer_t *)param;
+	uint32_t            adj;
 
+	adj = avr->cycle - when - avr_timer_cycle_adjust(p);
 	p->down = 0;
 	p->bottom = 1;
 	avr_raise_interrupt(avr, &p->overflow);
@@ -370,7 +398,8 @@ avr_timer_bottom(
 		if (p->comp[compi].r_ocr == 0)
 			break;
 		if (p->comp[compi].comp_cycles) {
-			avr_cycle_timer_register(avr, p->comp[compi].comp_cycles,
+			avr_cycle_timer_register(avr,
+									 p->comp[compi].comp_cycles - adj,
 									 dispatch[compi], p);
 		}
 	}
@@ -390,29 +419,16 @@ avr_timer_tov(
 		avr_cycle_count_t when,
 		void * param)
 {
-	avr_timer_t * p = (avr_timer_t *)param;
+	avr_timer_t       * p = (avr_timer_t *)param;
+	uint32_t            adj;
 
-	avr_cycle_count_t next = when;
-	if (((p->ext_clock_flags & (AVR_TIMER_EXTCLK_FLAG_AS2 |
-								AVR_TIMER_EXTCLK_FLAG_TN)) != 0) &&
-		(p->tov_cycles_fract != 0.0f)) {
-		/* Not using core clock: handle accumulated fractional cycles. */
-
-		p->phase_accumulator += p->tov_cycles_fract;
-		if (p->phase_accumulator >= 1.0f) {
-			++next;
-			p->phase_accumulator -= 1.0f;
-		} else if (p->phase_accumulator <= -1.0f) {
-			--next;
-			p->phase_accumulator += 1.0f;
-		}
-	}
+	adj = avr->cycle - when - avr_timer_cycle_adjust(p);
 	if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm) {
 		avr_cycle_count_t down_cycles;
 
 		p->down = 1;
 		down_cycles = (p->tov_top - 1) * p->cs_div_value;
-		avr_cycle_timer_register(avr, down_cycles, avr_timer_bottom, p);
+		avr_cycle_timer_register(avr, down_cycles - adj, avr_timer_bottom, p);
 		avr_timer_update_ocr(p);
 	} else {
 		avr_raise_interrupt(avr, &p->overflow);
@@ -432,7 +448,7 @@ avr_timer_tov(
 					next_match = p->tov_cycles - p->comp[compi].comp_cycles;
 				else
 					next_match = p->comp[compi].comp_cycles;
-				next_match -= (avr->cycle - next);
+				next_match -= adj;
 				avr_cycle_timer_register(avr, next_match, dispatch[compi], p);
 			} else if (p->tov_cycles == p->comp[compi].comp_cycles) {
 				dispatch[compi](avr, when, param);
@@ -440,7 +456,7 @@ avr_timer_tov(
 		}
 	}
 
-	return next +
+	return avr->cycle - adj +
 		(p->down ? (2 * p->tov_top * p->cs_div_value) : p->tov_cycles);
 }
 
