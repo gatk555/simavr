@@ -70,6 +70,7 @@ _timer_get_icr(
 	return p->io.avr->data[p->r_icr] |
 				(p->r_tcnth ? (p->io.avr->data[p->r_icrh] << 8) : 0);
 }
+
 static avr_cycle_count_t
 avr_timer_comp(
 		avr_timer_t *p,
@@ -267,7 +268,7 @@ avr_timer_irq_ext_clock(
 	}
 
 	switch (p->wgm_op_mode_kind) {
-		case avr_timer_wgm_fc_pwm:	// in the avr_timer_write_ocr comment "OCR is not used here" - why?
+		case avr_timer_wgm_fc_pwm:
 		case avr_timer_wgm_pwm:
 			if (p->down != 0) {
 				--p->tov_base;
@@ -325,6 +326,25 @@ avr_timer_irq_ext_clock(
 		avr_raise_interrupt(avr, &p->overflow);
 	}
 
+}
+
+// Check for buffered OCR update.
+
+static void avr_timer_update_ocr(avr_timer_t * p)
+{
+	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+		avr_timer_comp_p cp;
+		uint16_t         buffered;
+
+		cp = p->comp + compi;
+		if (!p->comp[compi].r_ocr)
+			break;
+		buffered = _timer_get_ocr(p, compi);
+		if (cp->ocr != buffered) {
+			cp->ocr = buffered;
+			cp->comp_cycles = (buffered + 1) * p->cs_div_value;
+		}
+	}
 }
 
 // Map of compare action functions. 
@@ -393,12 +413,15 @@ avr_timer_tov(
 		p->down = 1;
 		down_cycles = (p->tov_top - 1) * p->cs_div_value;
 		avr_cycle_timer_register(avr, down_cycles, avr_timer_bottom, p);
+		avr_timer_update_ocr(p);
 	} else {
 		avr_raise_interrupt(avr, &p->overflow);
 	}
 	p->tov_base = when;
 
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+		if (!p->comp[compi].r_ocr)
+			break;
 		if (p->comp[compi].comp_cycles) {
 			if (p->comp[compi].comp_cycles < p->tov_cycles &&
 				p->comp[compi].comp_cycles >= (avr->cycle - when)) {
@@ -408,8 +431,8 @@ avr_timer_tov(
 				if (p->wgm_op_mode_kind == avr_timer_wgm_fc_pwm)
 					next_match = p->tov_cycles - p->comp[compi].comp_cycles;
 				else
-					next_match = p->comp[compi].comp_cycles -
-						(avr->cycle - next);
+					next_match = p->comp[compi].comp_cycles;
+				next_match -= (avr->cycle - next);
 				avr_cycle_timer_register(avr, next_match, dispatch[compi], p);
 			} else if (p->tov_cycles == p->comp[compi].comp_cycles) {
 				dispatch[compi](avr, when, param);
@@ -532,7 +555,7 @@ avr_timer_start(avr_timer_t *p)
 
 		if (p->comp[compi].r_ocr == 0)
 			break;
-		match = _timer_get_ocr(p, compi);
+		match = p->comp[compi].ocr;
 		if (tcnt < match && !p->down) {
 			when = (match + 1 - tcnt) * p->cs_div_value;
 			when -= adj;
@@ -641,7 +664,7 @@ avr_timer_configure(
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
 		if (!p->comp[compi].r_ocr)
 			continue;
-		uint32_t ocr = _timer_get_ocr(p, compi);
+		uint32_t ocr = p->comp[compi].ocr;
 		//uint32_t comp_cycles = clock * (ocr + 1);
 		uint32_t comp_cycles;
 		if (virt_ext_clock)
@@ -721,11 +744,11 @@ avr_timer_reconfigure(
 			p->bottom = 0;
 			break;
 		case avr_timer_wgm_ctc: {
-			avr_timer_configure(p, p->cs_div_value, _timer_get_ocr(p, AVR_TIMER_COMPA), reset);
+			avr_timer_configure(p, p->cs_div_value, p->comp[0].ocr, reset);
 		}	break;
 		case avr_timer_wgm_pwm: {
 			uint16_t top = (p->mode.top == avr_timer_wgm_reg_ocra) ?
-				_timer_get_ocr(p, AVR_TIMER_COMPA) : _timer_get_icr(p);
+				 p->comp[0].ocr : _timer_get_icr(p);
 			avr_timer_configure(p, p->cs_div_value, top, reset);
 		}	break;
 		case avr_timer_wgm_fast_pwm: {
@@ -752,44 +775,42 @@ avr_timer_write_ocr(
 		uint8_t v,
 		void * param)
 {
-	avr_timer_comp_p comp = (avr_timer_comp_p)param;
-	avr_timer_t *timer = comp->timer;
-	uint16_t oldv;
+	avr_timer_comp_p  comp = (avr_timer_comp_p)param;
+	avr_timer_t      *timer = comp->timer;
+	int               index;
+	uint16_t          oldv, newv;
 
 	/* check to see if the OCR values actually changed */
+
 	oldv = _timer_get_comp_ocr(avr, comp);
 	avr_core_watch_write(avr, addr, v);
+	newv = _timer_get_comp_ocr(avr, comp);
 
+	// Send change IRQ in all modes.
+
+	index = (int)(comp - timer->comp);
+	avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM0 + index, newv);
+
+	if (timer->wgm_op_mode_kind == avr_timer_wgm_fc_pwm)
+			return;     // OCR is buffered
+
+	comp->ocr = newv;	// Immediate update
 	switch (timer->wgm_op_mode_kind) {
 		case avr_timer_wgm_normal:
-			avr_timer_reconfigure(timer, 0);
-			break;
-		case avr_timer_wgm_fc_pwm:	// OCR is not used here
 			avr_timer_reconfigure(timer, 0);
 			break;
 		case avr_timer_wgm_ctc:
 			avr_timer_reconfigure(timer, 0);
 			break;
 		case avr_timer_wgm_pwm:
-			if (timer->mode.top != avr_timer_wgm_reg_ocra) {
-				avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM0, _timer_get_ocr(timer, AVR_TIMER_COMPA));
-			} else {
-				avr_timer_reconfigure(timer, 0); // if OCRA is the top, reconfigure needed
+			if (timer->mode.top == avr_timer_wgm_reg_ocra && index == 0) {
+				// if OCRA is the top, reconfigure needed
+				avr_timer_reconfigure(timer, 0);
 			}
-			avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM1, _timer_get_ocr(timer, AVR_TIMER_COMPB));
-			if (sizeof(timer->comp)>2)
-				avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM2, _timer_get_ocr(timer, AVR_TIMER_COMPC));
 			break;
 		case avr_timer_wgm_fast_pwm:
-			if (oldv != _timer_get_comp_ocr(avr, comp))
+			if (oldv != newv)
 				avr_timer_reconfigure(timer, 0);
-			avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM0,
-					_timer_get_ocr(timer, AVR_TIMER_COMPA));
-			avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM1,
-					_timer_get_ocr(timer, AVR_TIMER_COMPB));
-			if (sizeof(timer->comp)>2)
-				avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM2,
-						_timer_get_ocr(timer, AVR_TIMER_COMPC));
 			break;
 		default:
 			AVR_LOG(avr, LOG_WARNING, "TIMER: %s-%c mode %d UNSUPPORTED\n",

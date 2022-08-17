@@ -27,11 +27,16 @@ static struct action {
 	{Record, 0, 0}, {Check, 1, 300}, {Check, 0, 721},
 	{Check, 1, 1023}, {Ignore, 0, 0},   // Firmware waggle at overflow
 	// OCR1B changed to 400 here.
-	{Check, 1, 1422}, {Check, 0, 1643}, // Incorrect, but pass for now.
+	{Check, 1, 1322}, {Check, 0, 1643},
 
-	/* Phase-correct, 10-bit: WGM 3. Start with TCNT = 400 OCR1B = 500. */
+	/* Phase-correct, 10-bit: WGM 3. Start with TCNT = 400 OCR1B = 500
+	 * so reported counts are all 400 less than cycle counts.
+	 */
 
 	{Record, 0, 0}, {Check, 1, 100}, {Check, 0, 1146},
+	// OCR1B changed to 100 here, counting down, takes effect at TOP
+	{Check, 1, 2146}, {Check, 0, 3592},
+
 	{Stop, 0}};
     
 static int index, stage = -1, step;

@@ -102,8 +102,8 @@ int main()
 
 	TCCR1B = 0;
 	TCCR1A = _BV(WGM11) + _BV(COM1B1) + _BV(COM1B0);  // WGM = 2, PC, 9-bit
-	OCR1BH = 1  ;         // Set to 300
-	OCR1BL = 44;          // Should take effect on overflow.
+	OCR1BH = 1;           // Set to 300
+	OCR1BL = 44;
 	TCNT1H = 0;
 	TCNT1L = 0;           // Reset couny
 	TCCR1B = _BV(CS10);   // Restart counting
@@ -137,16 +137,31 @@ int main()
 	// WGM = 3, PC, 10-bit
 	TCCR1A = _BV(WGM11) + _BV(WGM10) + _BV(COM1B1) + _BV(COM1B0);
 	OCR1BH = 1;           // Set to 500
-	OCR1BL = 244;         // Should take effect on overflow.
+	OCR1BL = 244;
 	TCNT1H = 1;
 	TCNT1L = 144;         // Start with count of 400
 	TCCR1B = _BV(CS10);   // Restart counting
 	PORTD &= ~_BV(PD4);   // Trigger monitor
 	TIFR1 = 0xff;         // Clear flags.
 
-	// Busy-wait for overflow, after 2 matches.
+	// Busy-wait for 2 matches.
 
-	while (!(TIFR1 & _BV(TOV1)))
+	while (!(TIFR1 & _BV(OCF1B)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+	while (!(TIFR1 & _BV(OCF1B)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+
+	OCR1BH = 0;           // Set to 100
+	OCR1BL = 100;         // Should take effect on overflow.
+
+	// Busy-wait for 2 matches.
+
+	while (!(TIFR1 & _BV(OCF1B)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+	while (!(TIFR1 & _BV(OCF1B)))
 		;
 
 	// Sleeping with interrupt off is interpreted by simavr as "exit please".
