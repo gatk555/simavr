@@ -63,6 +63,7 @@ avr_ioport_update_pin_irqs(
 {
 	avr_t * avr = p->io.avr;
 	uint8_t ddr = avr->data[p->r_ddr];
+	uint8_t val, prev;
 
 	// Set the PORT value if the pin is marked as output
 	// otherwise, if there is an 'external' pullup, set it
@@ -70,13 +71,18 @@ avr_ioport_update_pin_irqs(
 	// internal pullup, set that.
 	for (int i = 0; i < 8; i++) {
 		if (ddr & (1 << i))
-			avr_raise_irq(p->io.irq + i, (avr->data[p->r_port] >> i) & 1);
+			val = (avr->data[p->r_port] >> i) & 1;
 #ifdef CONFIG_PULL_UPS
 		else if (p->external.pull_mask & (1 << i))
-			avr_raise_irq(p->io.irq + i, (p->external.pull_value >> i) & 1);
+			val = (p->external.pull_value >> i) & 1;
 		else if ((avr->data[p->r_port] >> i) & 1)
-			avr_raise_irq(p->io.irq + i, 1);
+			val = 1;
 #endif
+		else
+			continue;
+	prev = (p->io.irq[i].value & 0xff) != 0;
+	if (val != prev)
+		avr_raise_irq(p->io.irq + i, val);
 	}
 }
 
@@ -99,7 +105,7 @@ avr_ioport_update_port_irqs(
 	avr_io_addr_t port_io = AVR_DATA_TO_IO(p->r_port);
 	if (avr->io[port_io].irq) {
 		avr_raise_irq(avr->io[port_io].irq + AVR_IOMEM_IRQ_ALL, avr->data[p->r_port]);
-		for (int i = 0; i < 8; i++)
+		for (int i = 0; i < 8; i++) 
 			avr_raise_irq(avr->io[port_io].irq + i, (avr->data[p->r_port] >> i) & 1);
  	}
 }

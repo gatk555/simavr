@@ -31,6 +31,8 @@
 #include "avr_ioport.h"
 #include "sim_time.h"
 
+static uint16_t _avr_timer_get_current_tcnt(avr_timer_t * p);
+
 /*
  * The timers are /always/ 16 bits here, if the higher byte register
  * is specified it's just added.
@@ -147,9 +149,7 @@ avr_timer_comp(
 	if (have_pin && mode != avr_timer_com_normal)
 		avr->timer_cycle = when;	// Record event time.
 
-	return p->tov_cycles ? 0 :
-				p->comp[comp].comp_cycles ?
-						when + p->comp[comp].comp_cycles : 0;
+	return 0;
 }
 
 static void
@@ -430,7 +430,8 @@ avr_timer_tov(
 		down_cycles = (p->tov_top - 1) * p->cs_div_value;
 		avr_cycle_timer_register(avr, down_cycles - adj, avr_timer_bottom, p);
 		avr_timer_update_ocr(p);
-	} else {
+	} else if (p->wgm_op_mode_kind != avr_timer_wgm_ctc ||
+			   _avr_timer_get_current_tcnt(p) >= p->tov_top) {
 		avr_raise_interrupt(avr, &p->overflow);
 	}
 	p->tov_base = when;
@@ -547,6 +548,7 @@ avr_timer_start(avr_timer_t *p)
 		adj = (avr->cycle - p->tov_base) % p->cs_div_value;
 	else
 		adj = 0;
+	adj -= 1;  // Because the current instruction is not counted in avr->cycle.
 
 	if (p->down) {
 		/* Count down to zero and restart. */
@@ -572,6 +574,8 @@ avr_timer_start(avr_timer_t *p)
 		if (p->comp[compi].r_ocr == 0)
 			break;
 		match = p->comp[compi].ocr;
+		if (match >= p->tov_top)
+			continue; // Equality handled by avr_timer_tov().
 		if (tcnt < match && !p->down) {
 			when = (match + 1 - tcnt) * p->cs_div_value;
 			when -= adj;
