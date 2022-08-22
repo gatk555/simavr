@@ -71,7 +71,9 @@ int dont_trace(const char * name)
 
 static int donttrace;
 
-static const char *where(avr_t *avr)
+/* This function is global to make it easy to call in a host gdb session. */
+
+const char *avr_where(avr_t *avr)
 {
 	avr_flashaddr_t  pc;
 	const char      *s;
@@ -101,7 +103,7 @@ static const char *where(avr_t *avr)
 }
 
 #define STATE(_f, argsf ...)	if (avr->trace) {				\
-	const char *symn = where(avr);							\
+	const char *symn = avr_where(avr);							\
 	if (symn)												\
 		printf("%04x: %-25s " _f, avr->pc, symn, ## argsf);	\
 }
