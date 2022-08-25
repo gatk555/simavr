@@ -32,6 +32,7 @@
 #include "sim_time.h"
 
 static uint16_t _avr_timer_get_current_tcnt(avr_timer_t * p);
+static void avr_timer_start(avr_timer_t *p);
 
 /*
  * The timers are /always/ 16 bits here, if the higher byte register
@@ -215,6 +216,12 @@ avr_timer_compc(
 	return avr_timer_comp((avr_timer_t*)param, when, AVR_TIMER_COMPC, 1);
 }
 
+// Map of compare action functions. 
+
+static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
+	{ avr_timer_compa, avr_timer_compb, avr_timer_compc };
+
+
 static void
 avr_timer_irq_ext_clock(
 		struct avr_irq_t * irq,
@@ -241,9 +248,6 @@ avr_timer_irq_ext_clock(
 	//AVR_LOG(avr, LOG_TRACE, "%s Timer%c tick, tcnt=%i\n", __func__, p->name, p->tov_base);
 
 	p->ext_clock_flags |= AVR_TIMER_EXTCLK_FLAG_STARTED;
-
-	static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
-		{ avr_timer_compa, avr_timer_compb, avr_timer_compc };
 
 	int overflow = 0;
 	/**
@@ -331,8 +335,10 @@ avr_timer_irq_ext_clock(
 
 // Check for buffered OCR update.
 
-static void avr_timer_update_ocr(avr_timer_t * p)
+static int avr_timer_update_ocr(avr_timer_t * p)
 {
+	int action = 0;
+
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
 		avr_timer_comp_p cp;
 		uint16_t         buffered;
@@ -344,8 +350,10 @@ static void avr_timer_update_ocr(avr_timer_t * p)
 		if (cp->ocr != buffered) {
 			cp->ocr = buffered;
 			cp->comp_cycles = (buffered + 1) * p->cs_div_value;
+			action = 1;
 		}
 	}
+	return action;
 }
 
 // Adjust for clock rates not a multiple of CPU clock.
@@ -373,12 +381,7 @@ static unsigned int avr_timer_cycle_adjust(avr_timer_t *p)
 	return adj;
 }
 
-// Map of compare action functions. 
-
-static const avr_cycle_timer_t dispatch[AVR_TIMER_COMP_COUNT] =
-	{ avr_timer_compa, avr_timer_compb, avr_timer_compc };
-
-// Called at BOTTOM in dual-slope modes.  Raise TOV and schedule.
+// Called at BOTTOM in fast and dual-slope PWM modes.
 
 static avr_cycle_count_t
 avr_timer_bottom(
@@ -389,19 +392,31 @@ avr_timer_bottom(
 	avr_timer_t * p = (avr_timer_t *)param;
 	uint32_t            adj;
 
-	adj = avr->cycle - when - avr_timer_cycle_adjust(p);
-	p->down = 0;
-	p->bottom = 1;
-	avr_raise_interrupt(avr, &p->overflow);
+	switch (p->wgm_op_mode_kind) {
+	case avr_timer_wgm_fast_pwm:
+		if (avr_timer_update_ocr(p)) // Update buffered registers.
+			avr_timer_start(p);      // Reschedule
+		break;
+	case avr_timer_wgm_fc_pwm:
+		//  Raise TOV and schedule.
 
-	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
-		if (p->comp[compi].r_ocr == 0)
-			break;
-		if (p->comp[compi].comp_cycles) {
-			avr_cycle_timer_register(avr,
-									 p->comp[compi].comp_cycles - adj,
-									 dispatch[compi], p);
+		adj = avr->cycle - when - avr_timer_cycle_adjust(p);
+		p->down = 0;
+		p->bottom = 1;
+		avr_raise_interrupt(avr, &p->overflow);
+
+		for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
+			if (p->comp[compi].r_ocr == 0)
+				break;
+			if (p->comp[compi].comp_cycles) {
+				avr_cycle_timer_register(avr,
+										 p->comp[compi].comp_cycles - adj,
+										 dispatch[compi], p);
+			}
 		}
+		break;
+	default:
+		break;
 	}
 	return 0;
 }
@@ -430,6 +445,10 @@ avr_timer_tov(
 		down_cycles = (p->tov_top - 1) * p->cs_div_value;
 		avr_cycle_timer_register(avr, down_cycles - adj, avr_timer_bottom, p);
 		avr_timer_update_ocr(p);
+	} else if (p->wgm_op_mode_kind == avr_timer_wgm_fast_pwm) {
+		avr_cycle_timer_register(avr, p->cs_div_value,
+								 avr_timer_bottom, p);
+		avr_raise_interrupt(avr, &p->overflow);
 	} else if (p->wgm_op_mode_kind != avr_timer_wgm_ctc ||
 			   _avr_timer_get_current_tcnt(p) >= p->tov_top) {
 		avr_raise_interrupt(avr, &p->overflow);
@@ -541,7 +560,7 @@ avr_timer_start(avr_timer_t *p)
 {
 	struct avr_t *avr = p->io.avr;
 	uint32_t      when, adj;
-	uint16_t      tcnt, to_top;
+	uint32_t      tcnt, to_top;
 
 	tcnt = _avr_timer_get_current_tcnt(p);
 	if (p->cs_div_value > 1)
@@ -560,7 +579,7 @@ avr_timer_start(avr_timer_t *p)
 		if (tcnt >= p->tov_top) {
 			/* Count to overflow. */
 
-			to_top = (1 << p->mode.size) - tcnt;
+			to_top = (1 << p->mode.size) + 1 - tcnt;
 		} else {
 			to_top = p->tov_top + 1 - tcnt;
 		}
@@ -798,11 +817,10 @@ avr_timer_write_ocr(
 	avr_timer_comp_p  comp = (avr_timer_comp_p)param;
 	avr_timer_t      *timer = comp->timer;
 	int               index;
-	uint16_t          oldv, newv;
+	uint16_t          newv;
 
 	/* check to see if the OCR values actually changed */
 
-	oldv = _timer_get_comp_ocr(avr, comp);
 	avr_core_watch_write(avr, addr, v);
 	newv = _timer_get_comp_ocr(avr, comp);
 
@@ -811,8 +829,10 @@ avr_timer_write_ocr(
 	index = (int)(comp - timer->comp);
 	avr_raise_irq(timer->io.irq + TIMER_IRQ_OUT_PWM0 + index, newv);
 
-	if (timer->wgm_op_mode_kind == avr_timer_wgm_fc_pwm)
-			return;     // OCR is buffered
+	if (timer->wgm_op_mode_kind == avr_timer_wgm_fc_pwm ||
+		timer->wgm_op_mode_kind == avr_timer_wgm_fast_pwm) {
+		return;     // OCR is buffered
+	}
 
 	comp->ocr = newv;	// Immediate update
 	switch (timer->wgm_op_mode_kind) {
@@ -827,10 +847,6 @@ avr_timer_write_ocr(
 				// if OCRA is the top, reconfigure needed
 				avr_timer_reconfigure(timer, 0);
 			}
-			break;
-		case avr_timer_wgm_fast_pwm:
-			if (oldv != newv)
-				avr_timer_reconfigure(timer, 0);
 			break;
 		default:
 			AVR_LOG(avr, LOG_WARNING, "TIMER: %s-%c mode %d UNSUPPORTED\n",

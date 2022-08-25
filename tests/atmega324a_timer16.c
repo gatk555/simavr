@@ -59,7 +59,6 @@ int main()
 
 	while (!(TIFR1 & _BV(OCF1B)))
 		;
-	TIFR1 = 0xff; // Clear flags.
 
 	// Busy-wait for overflow
 
@@ -127,7 +126,7 @@ int main()
 	// Busy-wait for overflow, after 2 matches.
 
 	while (!(TIFR1 & _BV(TOV1)))
-            ;
+		;
 
 	// Waggle for monitor
 
@@ -218,6 +217,62 @@ int main()
 	TIFR1 = 0xff;         // Clear flags.
 	while (!(TIFR1 & _BV(OCF1A)))
 		;
+	TIFR1 = 0xff;         // Clear flags.
+
+	/**** Start Fast PWM, 8 bit. ****/
+
+	TCCR1B = 0;
+	// WGM = 5, Fast PWM, 8-bit
+	TCCR1A = _BV(WGM10) + _BV(COM1A1) + _BV(COM1A0); // Set on match
+	OCR1AL = 88;
+	TCNT1H = 0;
+	TCNT1L = 0;
+	// WGM = 5, Fast PWM, 8-bit, scale = 1.
+	TCCR1B = _BV(WGM12) + _BV(CS10);   // Restart counting
+	PORTD &= ~_BV(PD0);   // Trigger monitor
+
+	// Busy-wait for overflow, after match, two full cycles.
+
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+
+	// Change PWM polarity and wait again.
+
+	TCCR1A &= ~_BV(COM1A0); // Now clear on match
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+
+	/**** Start Fast PWM, 9 bit. ****/
+
+	TCCR1B = 0;
+	// WGM = 6, Fast PWM, 9-bit
+	TCCR1A = _BV(WGM11) + _BV(COM1B1) + _BV(COM1B0); // Set on match
+	OCR1BH = 1;
+	OCR1BL = 88; // 344
+	TCNT1H = 0;
+	TCNT1L = 0;
+	// WGM = 6, Fast PWM, 9-bit, scale = 1.
+	TCCR1B = _BV(WGM12) + _BV(CS10);   // Restart counting
+	PORTD |= _BV(PD0);    // Trigger monitor
+
+	DDRA = 0xff;          // Waste some time
+	DDRB = 0;
+	OCR1BH = 0;			  // Reset to match at 30
+	OCR1BL = 30;
+
+	// Busy-wait for overflow, after match, two full cycles.
+
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
+	while (!(TIFR1 & _BV(TOV1)))
+		;
+	TIFR1 = 0xff;         // Clear flags.
 
 	// Sleeping with interrupt off is interpreted by simavr as "exit please".
 

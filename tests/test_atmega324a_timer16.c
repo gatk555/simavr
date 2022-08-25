@@ -17,7 +17,7 @@ static struct action {
 } actions[] = {
 	/* Normal mode WGM 0. */
 
-	{Record, F, 1, 0}, {Check, B, 1, 49}, {Check, F, 0, (1 << 16)},
+	{Record, F, 1, 0}, {Check, B, 1, 50}, {Check, F, 0, (1 << 16)},
 	{Ignore, B, 0, 0}, {Check, B, 1, (1 << 16) + 50 - 2}, {Ignore, B, 0, 0},
 
 	/* Phase-correct, 8-bit: WGM 1. Two full cycles with waggle on overflow.*/
@@ -28,7 +28,7 @@ static struct action {
     
 	/* Phase-correct, 9-bit: WGM 2. Very like WGM 1 so change OCR as well. */
 
-	{Record, F, 0, 0}, {Check, B, 1, 300}, {Check, B, 0, 721},
+	{Record, F, 0, 0}, {Check, B, 1, 300}, {Check, B, 0, 722},
 	{Check, F, 1, 1023},   // Firmware waggle at overflow
 	// OCR1B changed to 400 here.
 	{Check, B, 1, 1322}, {Check, B, 0, 1643},
@@ -41,14 +41,26 @@ static struct action {
 	// OCR1B changed to 100 here, counting down, takes effect at TOP
 	{Check, B, 1, 2146}, {Check, B, 0, 3592},
 
-	/* CTC, clear counter and toggle on OCRA, count changed during count. */
+	/* CTC, clear counter and toggle on OCRA, count changed to 255 after
+	 * the counter has started.
+	 */
 
 	{Record, F, 1, 0}, {Check, A, 1, 245}, {Check, A, 0, 746},
 	// OCR1A changed while counting
 	{Check, A, 1, 847}, {Check, A, 0, 948},
 
+	/* Fast PWM, 8-bit, WGM 5 OCRA = 88. */
+
+	{Record, F, 0, 0}, {Check, A, 1, 89}, {Check, A, 0, 255},
+	{Check, A, 1, 344}, {Check, A, 0, 511}, // Now change polarity
+	{Check, A, 1, 767},
+
+	/* Fast PWM, 9-bit, WGM 6 OCRB = 344 but changed to 30 before any match. */
+
+	{Record, F, 1, 0}, {Check, B, 1, 344}, {Check, B, 0, 511},
+	{Check, B, 1, 542}, {Check, B, 0, 1022},
+
 	{Stop, 0}};
-    
 static int index, stage = -1, step;
 
 static void monitor(struct avr_irq_t *irq, uint32_t value, void *param)

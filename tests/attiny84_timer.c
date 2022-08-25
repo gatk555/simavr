@@ -1,9 +1,3 @@
-/* -*- mode: C; eval:
-   (setq tab-width 4)
-   (setq c-basic-offset 4)
-   (setq indent-tabs-mode t); -*- (emacs magic)
- */
-
 /*
 	attiny84_timer.c
 
@@ -83,6 +77,17 @@ int main()
 	TCCR0B = 0;          // Timer stopped
 	TCCR0A = _BV(WGM00); // Phase correct, TOP = 0x3ff
 	TCNT0 = 0;           // Restart from zero.
+	GTCCR = _BV(PSR10);  // Clear pre-scaler.
+	TCCR0B = 3;          // Set prescaler ratio to 8 and run.
+	PORTA |= 1;          // Tickle monitor to say ready.
+
+	do_reads();
+
+	// Fast PWM, top is 0xff
+
+	TCCR0B = 0;          // Timer stopped
+	TCCR0A = _BV(WGM01) + _BV(WGM00); // Phase correct, TOP = 0x3ff
+	TCNT0 = 10;          // Start with non-zero count.
 	GTCCR = _BV(PSR10);  // Clear pre-scaler.
 	TCCR0B = 3;          // Set prescaler ratio to 8 and run.
 	PORTA |= 1;          // Tickle monitor to say ready.

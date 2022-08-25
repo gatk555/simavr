@@ -1,6 +1,3 @@
-/*  -*-mode: C; eval: (setq tab-width 4) (setq c-basic-offset 4) (setq indent-tabs-mode t);-*-
- */
-
 /*
 	test_attiny84_timer.c
 
@@ -44,9 +41,11 @@ static struct {uint32_t cycle, value, next; } tests[] = {
 	{10, 10}, {250, 250}, {256, 0}, {517, 5, 1},
 	// Timer in CTC mode with 23 clocks/cycle.
 	{10, 10}, {23, 0}, {252, 22, 1},
-	// Phase-correct with TOP == 255.
+	// Phase-correct PWM with TOP == 255.
 	{10, 10}, {254, 254}, {255, 255}, {256, 254}, {259, 251}, {260, 250}, 
 	{509, 1}, {510, 0}, {511, 1}, {765, 255}, {766, 254}, {1530, 0, 1},
+	// Fast PWM with TOP == 255.
+	{10, 20}, {244, 254}, {245, 255}, {246, 0}, {300, 54, 1},
 	{0}
 };
 
@@ -108,7 +107,7 @@ int main(int argc, char **argv) {
 	base_irq = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('A'), 0);
 	avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN0, monitor, avr);
 	tests_run_avr(avr, 30000);
-    if (step != TEST_COUNT)
+	if (step != TEST_COUNT)
 		fail("Completed %d tests of %ld\n", step, TEST_COUNT);
 	tests_assert_cycles_between(90000, 180000);
 	tests_success();
