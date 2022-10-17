@@ -229,9 +229,9 @@ void tests_assert_uart_receive_avr(avr_t *avr,
 	struct output_buffer buf;
 	init_output_buffer(&buf);
 
-	avr_irq_register_notify(
-                avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ(uart),
-                              UART_IRQ_OUTPUT), buf_output_cb, &buf);
+	avr_irq_register_notify(avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ(uart),
+										  UART_IRQ_OUTPUT),
+							buf_output_cb, &buf);
 	tests_assert_xxxx_receive_avr(avr, run_usec, &buf, expected);
 }
 

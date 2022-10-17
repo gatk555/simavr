@@ -3,7 +3,7 @@
 
 	Copyright 2022 Giles Atkinson
 
- 	This file is part of simavr.
+	This file is part of simavr.
 
 	simavr is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -128,6 +128,6 @@ int main(int argc, char **argv) {
 		fail("Timed out\n");
 	if (strcmp(expected, log))
 		fail("\nInternal log: %s.\n    Expected: %s.\n", log, expected);
- 	tests_success();
- 	return 0;
+	tests_success();
+	return 0;
 }
