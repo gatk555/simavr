@@ -29,8 +29,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef HAVE_LIBDWARF
 #include <libelf.h>
 #include <gelf.h>
+#else
+#undef ELF_SYMBOLS
+#define ELF_SYMBOLS 0
+#endif
 
 #include "sim_elf.h"
 #include "sim_vcd_file.h"
@@ -96,7 +102,7 @@ avr_load_firmware(
 
 	int           scount = firmware->flashsize >> 1;
 	uint32_t      addr;
-        const char ** table;
+	const char ** table;
 
 	// Allocate table of Flash address strings.
 
@@ -269,6 +275,7 @@ avr_load_firmware(
 		avr_vcd_start(avr->vcd);
 }
 
+#ifdef HAVE_LIBDWARF
 static void
 elf_parse_mmcu_section(
 		elf_firmware_t * firmware,
@@ -624,3 +631,11 @@ elf_read_firmware(
 	close(fd);
 	return 0;
 }
+#else //  HAVE_LIBDWARF not defined.
+int
+elf_read_firmware(const char * file, elf_firmware_t * firmware)
+{
+	AVR_LOG(NULL, LOG_ERROR, "ELF format is not supported by this build.\n");
+	return -1;
+}
+#endif
