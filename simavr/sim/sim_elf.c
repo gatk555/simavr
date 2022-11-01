@@ -116,8 +116,7 @@ avr_load_firmware(
 		uint32_t new_size;
 
 		new_size = firmware->highest_data_symbol + 1;
-		avr->data_names = realloc(avr->data_names,
-					  new_size * sizeof (char *));
+		avr->data_names = realloc(avr->data_names, new_size * sizeof (char *));
 		memset(avr->data_names + avr->trace_data->data_names_size,
 		       0,
 		       (new_size - avr->trace_data->data_names_size) *
@@ -157,6 +156,12 @@ avr_load_firmware(
 	avr_spread_lines(table, scount);
 	avr_spread_lines(avr->data_names + avr->ioend + 1,
 			 avr->trace_data->data_names_size - (avr->ioend + 1));
+#else
+	// Parse given ELF file for DWARF info.
+
+	if (firmware->dwarf_file)
+		avr_read_dwarf(avr, firmware->dwarf_file);
+	free(firmware->dwarf_file);
 #endif
 
 	avr_loadcode(avr, firmware->flash,
