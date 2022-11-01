@@ -136,7 +136,6 @@ static void process(struct ctx *ctxp, Dwarf_Die die)
                 if (symv > DATA_OFFSET) {
                     symv -= DATA_OFFSET;
 
-
                     /* Is it an I/O register or RAM? */
 
                     if (symv > 32 &&
