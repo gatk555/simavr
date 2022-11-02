@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef HAVE_LIBDWARF
+#ifdef HAVE_LIBELF
 #include <libelf.h>
 #include <gelf.h>
 #else
@@ -97,7 +97,8 @@ avr_load_firmware(
 		avr->avcc = firmware->avcc;
 	if (firmware->aref)
 		avr->aref = firmware->aref;
-#if CONFIG_SIMAVR_TRACE && ELF_SYMBOLS
+#if ELF_SYMBOLS
+#if CONFIG_SIMAVR_TRACE
 	/* Store the symbols read from the ELF file. */
 
 	int           scount = firmware->flashsize >> 1;
@@ -163,6 +164,7 @@ avr_load_firmware(
 		avr_read_dwarf(avr, firmware->dwarf_file);
 	free(firmware->dwarf_file);
 #endif
+#endif // ELF_SYMBOLS
 
 	avr_loadcode(avr, firmware->flash,
 			firmware->flashsize, firmware->flashbase);
@@ -280,7 +282,7 @@ avr_load_firmware(
 		avr_vcd_start(avr->vcd);
 }
 
-#ifdef HAVE_LIBDWARF
+#ifdef HAVE_LIBELF
 static void
 elf_parse_mmcu_section(
 		elf_firmware_t * firmware,
@@ -636,7 +638,7 @@ elf_read_firmware(
 	close(fd);
 	return 0;
 }
-#else //  HAVE_LIBDWARF not defined.
+#else //  HAVE_LIBELF not defined.
 int
 elf_read_firmware(const char * file, elf_firmware_t * firmware)
 {
