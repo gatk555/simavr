@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (May 2022) this fork contains some new or updated items.
+At the time of writing (November 2022) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -11,6 +11,7 @@ HTML file in the doc directory looks better.  Github's HTML processing is a litt
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
 + Changes intended to help to add newer core types, such as the ATmega4809.
++ Support for additional internally-clocked timer modes (incomplete).
 + The GPIO pull-up code is conditionally compiled.
 + Some Pull Requests that are not yet integrated upstream may be included.
 + The old AVR header files have been removed.
@@ -21,18 +22,17 @@ Some of these changes may be available as upstream Pull Requests.
 Because the old AVR header files have been removed, it is necessary to create
 a link,
 <I>simavr/simavr/cores/avr</I>
-to the set that come with
+to the set of header files that come with
 <I>avr-libc.</I>
 The target directory should be the one containing
 <I>io.h.</I>
 (On Windows, the
 <I>mklink</I>
 command creates symbolic links.)
-Alternatively, copy the header files into a subdirectory.
+Alternatively, copy the header files into a subdirectory at that location.
 <P>
-There is an additional library dependency, libdwarf, that extracts
-debugging information from ELF files, including register names and source
-code line numbers.
+If libdwarf is installed, debugging information is extracted from ELF files,
+including register names and source code line numbers.
 The register names are shown in gdb, while line numbers, register names and
 variable names have been added to instruction tracing output:
 <PRE>
@@ -339,9 +339,9 @@ Because an ELF firmware file can contain parameters for the simulator,
 the first step is to read the file:
 <PRE>
 	elf_firmware_t  fw = {};  //  Must be initialised,
-	char           *firmware;
+	char           *firmware; //  File name for firmware
 
-	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
+	sim_setup_firmware(firmware, 0, &fw, argv[0]);
 </PRE>
 An ELF file is assumed, unless the file name ends ".hex".
 When using ihex format, the
@@ -351,7 +351,7 @@ of the specific AVR part before the function call:
 <PRE>
 	strcpy(fw.mmcu, name);
 	fw.frequency = f_cpu;
-	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
+	sim_setup_firmware(firmware, 0, &fw, argv[0]);
 </PRE>
 With the firmware prepared for loading, the next step is to create
 the simulated microcontroller and load the firmware:
@@ -382,9 +382,9 @@ To make simulation faster, a burst size can be set as
 <H5>Connecting the external circuit.</H5>
 If the firmware is to do anything,
 there needs to be a connection to a simulated external circuit.
-In most cases this will use the digital input and output functions
-of the AVR general-purpose I/O ports (GIOPs).
-Some internal peripheral simulations route through the GIOP simulation,
+In many cases this will use the digital input and output functions
+of the AVR general-purpose I/O ports (GPIOs).
+Some internal peripheral simulations route through the GPIO simulation,
 so external code does not need to consider what goes on inside,
 while others are handled through their own interfaces.
 <P>
@@ -563,9 +563,9 @@ New values for the conventional ADC channels can be set in the handler.
 <P>
 The analogue comparator can share the physical ADC inputs on some variants
 and has its own inputs.
-Simavr treats all of these as independent of both GIO and ADC inputs.
-Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 represent the same pin,
-those are different numbers and simavr would allow you to set
+Simavr treats all of these as independent of both GPIO and ADC inputs.
+Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 may represent the same pin,
+those are different entities and simavr would allow you to set
 different voltages.
 Providing input values for the comparator is similar to the ADC,
 except that monitoring is continuous,

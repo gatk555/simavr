@@ -292,9 +292,9 @@ Because an ELF firmware file can contain parameters for the simulator,
 the first step is to read the file:
 <PRE>
 	elf_firmware_t  fw = {};  //  Must be initialised,
-	char           *firmware;
+	char           *firmware; //  File name for firmware
 
-	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
+	sim_setup_firmware(firmware, 0, &fw, argv[0]);
 </PRE>
 An ELF file is assumed, unless the file name ends ".hex".
 When using ihex format, the
@@ -304,7 +304,7 @@ of the specific AVR part before the function call:
 <PRE>
 	strcpy(fw.mmcu, name);
 	fw.frequency = f_cpu;
-	sim_setup_firmware(firmware_file_name, 0, &fw, argv[0]);
+	sim_setup_firmware(firmware, 0, &fw, argv[0]);
 </PRE>
 With the firmware prepared for loading, the next step is to create
 the simulated microcontroller and load the firmware:
@@ -335,9 +335,9 @@ To make simulation faster, a burst size can be set as
 <H5>Connecting the external circuit.</H5>
 If the firmware is to do anything,
 there needs to be a connection to a simulated external circuit.
-In most cases this will use the digital input and output functions
-of the AVR general-purpose I/O ports (GIOPs).
-Some internal peripheral simulations route through the GIOP simulation,
+In many cases this will use the digital input and output functions
+of the AVR general-purpose I/O ports (GPIOs).
+Some internal peripheral simulations route through the GPIO simulation,
 so external code does not need to consider what goes on inside,
 while others are handled through their own interfaces.
 <P>
@@ -516,9 +516,9 @@ New values for the conventional ADC channels can be set in the handler.
 <P>
 The analogue comparator can share the physical ADC inputs on some variants
 and has its own inputs.
-Simavr treats all of these as independent of both GIO and ADC inputs.
-Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 represent the same pin,
-those are different numbers and simavr would allow you to set
+Simavr treats all of these as independent of both GPIO and ADC inputs.
+Although ADC_IRQ_ADC1 and ACOMP_IRQ_ADC1 may represent the same pin,
+those are different entities and simavr would allow you to set
 different voltages.
 Providing input values for the comparator is similar to the ADC,
 except that monitoring is continuous,
