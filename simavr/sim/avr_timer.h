@@ -115,7 +115,9 @@ typedef struct avr_timer_comp_t {
 		avr_regbit_t		com_pin;		// where comparator output is connected
 		uint64_t			comp_cycles;
 		avr_regbit_t        foc;            // "force compare match" strobe
+		avr_irq_t          *pin_irq;		// IRQ for com_pin.
 	    uint16_t            ocr;			// Active compared value
+		uint8_t             wave_active;	// Actively controlling com_pin.
 } avr_timer_comp_t, *avr_timer_comp_p;
 
 enum {

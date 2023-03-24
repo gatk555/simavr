@@ -81,23 +81,45 @@ avr_timer_comp(
 		uint8_t comp,
 		uint8_t raise_interrupt)
 {
-	avr_t * avr = p->io.avr;
+	avr_t            * avr = p->io.avr;
+	avr_timer_comp_t * cp = p->comp + comp;
+
 	if (raise_interrupt) {
-	   avr_raise_interrupt(avr, &p->comp[comp].interrupt);
+	   avr_raise_interrupt(avr, &cp->interrupt);
 	}
 
 	// check output compare mode and set/clear pins
-	uint8_t     mode = avr_regbit_get(avr, p->comp[comp].com);
+	uint8_t     mode = avr_regbit_get(avr, cp->com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
-    int         have_pin = p->comp[comp].com_pin.reg;	// Physical pin
-	uint32_t    flags = (have_pin) ? AVR_IOPORT_OUTPUT : 0;
+    int         have_pin = (cp->pin_irq != NULL);	// Physical pin
+	uint32_t    flags;
 
 	AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);
+
+
+	/* Control output pins only when waveform generation is on.
+	 * This really should happen when the control register is written,
+	 * but that would be messy too.
+	 */
+
+	if (have_pin) {
+		if (cp->wave_active && mode == avr_timer_com_normal) {
+			avr_unconnect_irq(&p->io.irq[TIMER_IRQ_OUT_COMP + comp],
+							cp->pin_irq);
+			cp->wave_active = 0;
+		} else if (!cp->wave_active && mode != avr_timer_com_normal) {
+			avr_connect_irq(&p->io.irq[TIMER_IRQ_OUT_COMP + comp],
+							cp->pin_irq);
+			cp->wave_active = 1;
+		}
+	}
+	flags = (cp->wave_active) ? AVR_IOPORT_OUTPUT : 0;
 
 	switch (p->wgm_op_mode_kind) {
 	case avr_timer_wgm_fc_pwm:
 		switch (mode) {
 		case avr_timer_com_normal: // Normal mode OCnA disconnected
+			avr_raise_irq(irq, 1);
 			break;
 		case avr_timer_com_toggle: // Toggle OCnA on compare match
 			if (comp != 0 || p->mode.top == avr_timer_wgm_reg_constant ||
@@ -113,8 +135,7 @@ avr_timer_comp(
 			 */
 
 			avr_raise_irq(irq,
-						flags |
-						(avr_regbit_get(avr, p->comp[comp].com_pin) ? 0 : 1));
+						  flags | (avr_regbit_get(avr, cp->com_pin) ? 0 : 1));
 			break;
 		case avr_timer_com_clear:
 			// Inverted phase-correct.
@@ -129,12 +150,13 @@ avr_timer_comp(
 	default:
 		switch (mode) {
 		case avr_timer_com_normal: // Normal mode OCnA disconnected
+			avr_raise_irq(irq, 1);
 			break;
 		case avr_timer_com_toggle: // Toggle OCnA on compare match
 			if (have_pin)
 				avr_raise_irq(irq,
 						flags |
-						(avr_regbit_get(avr, p->comp[comp].com_pin) ? 0 : 1));
+						(avr_regbit_get(avr, cp->com_pin) ? 0 : 1));
 			else // no pin, toggle the IRQ anyway
 				avr_raise_irq(irq, irq->value ? 0 : 1);
 			break;
@@ -1066,6 +1088,7 @@ avr_timer_reset(
 	// (try) to get the ioport corresponding IRQ and connect them
 	// they will automagically be triggered when the comparator raises
 	// it's own IRQ
+
 	for (int compi = 0; compi < AVR_TIMER_COMP_COUNT; compi++) {
 		p->comp[compi].comp_cycles = 0;
 
@@ -1076,7 +1099,7 @@ avr_timer_reset(
 			// cool, got an IRQ
 			//printf("%s-%c COMP%c Connecting PIN IRQ %d\n",
 			//	__func__, p->name, 'A'+compi, req.irq[0]->irq);
-			avr_connect_irq(&port->irq[TIMER_IRQ_OUT_COMP + compi], req.irq[0]);
+			p->comp[compi].pin_irq = req.irq[0];
 		}
 	}
 
