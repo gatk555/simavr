@@ -1,6 +1,6 @@
 /*
 	attiny84_servo.c
-		RC servo relay firmware.
+        RC servo relay firmware.
 
 	Copyright 2023 Giles Atkinson
 
@@ -36,30 +36,38 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
-#include "avr_mcu_section.h"
+#include "attiny84_servo.h"
 
 
 //#define T85 // ATtiny85
 #ifdef T85
-AVR_MCU(F_CPU, "attiny85");
 #define T_FLAGS TIFR
 #else
-AVR_MCU(F_CPU, "attiny84");
 #define T_FLAGS TIFR0
+#endif
 
-#if 1 //Temporary
-#define SET_A
-#define CLR_A
-#else
-#define SET_A PORTA |= _BV(PA7)		// Set output A - PA7
-#define CLR_A PORTA &= ~_BV(PA7)
-#define GET_L (PINA & _BV(PA6))   // Get serial line: DI is PA6
-#endif
-#endif
+/* Pulse width for each of three servos. */
+
+uint16_t pulse[SERVOS] = {3000, 3000, 3000};
+
+/* Current command byte. */
+
+uint8_t command;
+
+/* The GPIO mask for the servos - port B on T84. */
+
+const uint8_t servomask[SERVOS] = {1,2,4}; // PB0, PB1, PB2: pins 2, 3, 5.
 
 //#define SIMAVR
 #ifdef SIMAVR
 #include <stdio.h>
+#include "avr_mcu_section.h"
+
+#ifdef T85
+AVR_MCU(F_CPU, "attiny85");
+#else
+AVR_MCU(F_CPU, "attiny84");
+#endif
 
 /* No UART in tiny84, so simply write to unused register TCNT1L. */
 
@@ -74,16 +82,7 @@ static int uart_putchar(char c, FILE *stream) {
 
 static FILE mystdout = FDEV_SETUP_STREAM(uart_putchar, NULL,
 										 _FDEV_SETUP_WRITE);
-#endif
-
-uint16_t tick_a, tick_b, tick_c;
-
-/* Macro for micro-second delays - no FP, unlike _delay_us(), accurate if
- * clock F_CPU is in whole MHz.
- */
-
-#define delay_us(n) \
-	__builtin_avr_delay_cycles((uint16_t)(F_CPU / 1000000) * n)
+#endif // SIMAVR
 
 /* Check for serial input. */
 
@@ -188,11 +187,22 @@ static void get_byte(void)
 		}
 
 		if (bits == 9) {
+			uint8_t servo;
+
 			carried = bits = 0;
 
 			/* Byte complete: do something; about 888 clocks are available. */
 
-			PORTA = value;
+			if (value & FRAME) {
+				/* Command byte.  First of two (for now). */
+
+				command = value;
+			} else {
+				servo = (command & CHAN_MASK) >> CHAN_SHIFT;
+				if (servo < SERVOS)
+					pulse[servo] = MINIMUM_PULSE +
+						             ((command & 0x1f) << 7) + value;
+			}
 
 			/* Synchronise with the input clock so that we have 222 uS before
 			 * the next sample.
@@ -201,8 +211,8 @@ static void get_byte(void)
 			T_FLAGS |= _BV(OCF0A);
 			while (!(T_FLAGS & _BV(OCF0A)))
 				;
-			USIDR |= (0xff << ++samples);  // Blank processed samples
-			if (USIDR == 0xff)		       // Stop bit or idle.
+			USIDR |= (0xff << ++samples);    // Blank processed samples
+			if (USIDR == 0xff)		         // Stop bit or idle.
 				return;
 		} else {
 			carried = samples ? samples : 2; // 2 indicates active, not carried
@@ -217,7 +227,7 @@ static void get_byte(void)
 
 int main(void)
 {
-	int i;
+	uint8_t i;
 
 #ifdef SIMAVR
 	stdout = &mystdout;
@@ -241,9 +251,9 @@ int main(void)
 
 	/* Enable output pins. */
 
-//	DDRA |= _BV(PA7);
 	DDRA = ~_BV(PA6); // All pins except DI
-	PORTA = 0x55;
+//	DDRA = 0xff;
+//	PORTA = _BV(PA6); // Fake DI high
 
 	/* Wait until the serial input line is idle for 24 cycles. */
 
@@ -260,18 +270,40 @@ int main(void)
 	
 	/* All set, loop receiving commands and sending them out. */
 
+	i = 0;
 	for (;;) {
-		for (i = 0; i < 30; ++i) {
-			get_byte();                     // Check serial,
-			SET_A;
-			delay_us(900);
-			CLR_A;
-		}
-		for (i = 0; i < 30; ++i) {
-			get_byte();                     // Check serial,
-			SET_A;
-			delay_us(2100);
-			CLR_A;
-		}
+		uint16_t ticks;
+
+		get_byte();                     // Check serial,
+		ticks = pulse[i];
+
+		/* In-line assembler: Set the outputs and run a count loop for the
+		 * the required hold time, in 500nS units.
+		 * The sbrs takes 2 cycles if the low bit is set, otherwise
+		 * the sbrs takes 1 and rjmp 2. So two extra cycles (500nS)
+		 * are used when set.  The main loop takes 4 cycles, so subtract 2.
+		 * Timing for T84, not checked on T85.
+		 * The 3 extra cycles are not important.
+		 */
+
+		asm volatile (
+					  "	out %1, %2\n"
+					  " sbrs %0, 1\n"
+					  " rjmp L1\n"
+					  " nop\n"
+					  " nop\n"
+					  " nop\n"
+				   "L1: sbiw %0, 2\n"
+					  " brcc L1\n"
+					  "	out %1, __zero_reg__\n"
+				   : "+w" (ticks)		// "w" means requires upper pair.
+				   : "I" (_SFR_IO_ADDR(PORTA)), "r" (servomask[i])
+//				   : "I" (_SFR_IO_ADDR(PORTA)), "r" (servomask[i] | _BV(PA6))
+				   : "cc");				// Clobbers condition codes.
+
+//		PORTA = 0;
+//		PORTA = _BV(PA6);
+		if (++i >= SERVOS)
+			i = 0;
 	}
 }
