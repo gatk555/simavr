@@ -17,7 +17,7 @@ jobs:
       - name: CI-Build
         run: |
           echo 'Running in MSYS2!'
-          ln -s /usr/lib/avr/include/avr/ simavr/cores/avr
+          ln -s /mingw64/avr/include/avr/ simavr/cores/avr
           make build-simavr V=1
           mkdir simavr_installed
           make -k install DESTDIR=$(pwd)/simavr_installed/ || true
@@ -45,9 +45,8 @@ jobs:
           patchelf --set-rpath '$ORIGIN/../lib/' simavr_installed/bin/simavr
           ldd simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
-      - name: Tar files
-        run: tar -cvzf simavr.tar.gz -C simavr_installed .
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Linux
-          path: simavr.tar.gz
+          path: simavr_installed
+
