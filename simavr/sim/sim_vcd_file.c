@@ -334,13 +334,14 @@ avr_vcd_init_input(
 		/* format is <four-character ioctl>[_<IRQ index>] */
 		if (strlen(vcd->signal[i].name) >= 4) {
 			char *dup = strdupa(vcd->signal[i].name);
-			char *ioctl = strsep(&dup, "_");
-			int index = 0;
-			if (dup)
-				index = atoi(dup);
+			char *ioctl = strtok(dup, "_");
+
 			if (strlen(ioctl) == 4) {
-				uint32_t ioc = AVR_IOCTL_DEF(
-						ioctl[0], ioctl[1], ioctl[2], ioctl[3]);
+				int index = 0;
+				uint32_t ioc;
+
+				index = atoi(dup + 5);
+				ioc = AVR_IOCTL_DEF(ioctl[0], ioctl[1], ioctl[2], ioctl[3]);
 				avr_irq_t * irq = avr_io_getirq(vcd->avr, ioc, index);
 				if (irq) {
 					vcd->signal[i].irq.flags = IRQ_FLAG_INIT;
