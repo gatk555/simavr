@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   build-win64:
-    runs-on: windows-latest
+    runs-on: windows-2019
     defaults:
       run:
         shell: msys2 {0}
@@ -28,7 +28,7 @@ jobs:
           name: Simavr for 64-bit Windows
           path: simavr_installed
   build-lin64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - name: Install Dependencies
@@ -48,5 +48,32 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Linux
+          path: simavr_installed
+  build-darwin-x64:
+    # this is currently macos-11, Big Sur
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Dependenncies
+        run: | 
+          brew install make libelf freeglut patchelf 
+          brew tap osx-cross/avr
+          brew install avr-gcc@5 avr-binutils
+          export PATH="/usr/local/opt/avr-gcc@5/bin:$PATH"
+      - name: CI-Build
+        run: |
+	  find /usr/local -name iotn13.h
+          avr-gcc --version || true
+          clang --version
+          export CFLAGS="-DGL_SILENCE_DEPRECATION"
+          make -j4 build-simavr V=1 RELEASE=1
+          mkdir simavr_installed
+          make -k -j4 install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/ || true
+          file simavr_installed/bin/*
+          otool -L simavr_installed/bin/*
+          simavr_installed/bin/simavr --list-cores || true
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Simavr for Mac OS on 64-bit Intel
           path: simavr_installed
 
