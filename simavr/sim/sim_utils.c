@@ -75,8 +75,9 @@ argv_parse(
 	do {
 		if (argv->argc == argv->size)
 			argv = argv_realloc(argv, argv->size + 8);
-		if ((a = strsep(&s, " \t")) != NULL)
+		if ((a = strtok(s, " \t")) != NULL)
 			argv->argv[argv->argc++] = a;
+                s = NULL;
 	} while (a);
 	argv->argv[argv->argc] = NULL;
 	return argv;
