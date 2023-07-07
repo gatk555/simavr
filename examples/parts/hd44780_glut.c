@@ -27,8 +27,10 @@
 #else
 #include <GL/glut.h>
 #endif
+
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "lcd_font.h"	// generated with gimp
 
