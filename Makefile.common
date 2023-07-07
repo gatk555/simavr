@@ -86,10 +86,9 @@ ifeq (${shell uname}, Darwin)
  endif
 else
  AVR 		:= avr-
+ # FIXME uname -o doesn't work on bsd derivatives
+ WIN := ${shell uname -o 2>/dev/null}
 endif
-
-# FIXME uname -o doesn't work on bsd derivatives
-WIN := ${shell uname -o}
 
 ifeq (${WIN}, Msys)
 AVR_ROOT    := ${shell echo "${AVR32_HOME}" | tr '\\' '/'}

@@ -62,7 +62,7 @@ jobs:
           export PATH="/usr/local/opt/avr-gcc@5/bin:$PATH"
       - name: CI-Build
         run: |
-          find /usr/local -name iotn13.h
+          ln -s /usr/local/Cellar/avr-gcc@5/5.5.0/avr/include/avr simavr/cores/avr
           avr-gcc --version || true
           clang --version
           export CFLAGS="-DGL_SILENCE_DEPRECATION"
