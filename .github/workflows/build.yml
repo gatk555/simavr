@@ -9,7 +9,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -32,7 +32,7 @@ jobs:
   build-lin64:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install Dependencies
         run: sudo apt-get install -y build-essential git make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf
       - name: CI-Build
@@ -56,7 +56,7 @@ jobs:
     # this is currently macos-11, Big Sur
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install Dependencies
         run: | 
           brew install make libelf freeglut patchelf 
