@@ -74,7 +74,7 @@ jobs:
           file simavr_installed/bin/*
           otool -L simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
-	  cp -r examples simavr_installed
+          cp -r examples simavr_installed
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for Mac OS on 64-bit Intel
