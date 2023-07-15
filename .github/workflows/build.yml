@@ -23,6 +23,7 @@ jobs:
           make -k install DESTDIR=$(pwd)/simavr_installed/ || true
           mv simavr_installed/bin/simavr simavr_installed/bin/simavr.exe
           file simavr_installed/bin/*
+          cp -r examples simavr_installed
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Windows
@@ -45,6 +46,7 @@ jobs:
           patchelf --set-rpath '$ORIGIN/../lib/' simavr_installed/bin/simavr
           ldd simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
+          cp -r examples simavr_installed
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Linux
@@ -54,7 +56,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install Dependenncies
+      - name: Install Dependencies
         run: | 
           brew install make libelf freeglut patchelf 
           brew tap osx-cross/avr
@@ -72,6 +74,7 @@ jobs:
           file simavr_installed/bin/*
           otool -L simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
+	  cp -r examples simavr_installed
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for Mac OS on 64-bit Intel
