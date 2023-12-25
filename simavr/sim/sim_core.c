@@ -732,12 +732,8 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 		_avr_sp_get(avr) > avr->ramend) {
 //		avr->trace = 1;
 		STATE("RESET\n");
-//		printf("Bad: %d %d %d %ld\n", (avr->pc == 0 && avr->cycle > 0),
-//		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->cycle);
-		crash(avr);
-	}
-	avr->trace_data->touched[0] = avr->trace_data->touched[1] =
-		avr->trace_data->touched[2] = 0;
+//		printf("Bad: %d %d %d %x\n", (avr->pc == 0 && avr->cycle > 0),
+//		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->pc);
 #endif
 
 	/* Ensure we don't crash simavr due to a bad instruction reading past
@@ -1101,8 +1097,10 @@ SREG();
 					uint16_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
 					STATE("lpm %s, (Z[%04x]) \t%s\n",
 					      AVR_REGNAME(0), z, FAS(z));
+					uint8_t v = avr->flash[z];
+					avr_ioctl(avr, AVR_IOCTL_FLASH_LPM, &v);
+					_avr_set_r(avr, 0, v);
 					cycle += 2; // 3 cycles
-					_avr_set_r(avr, 0, avr->flash[z]);
 				}	break;
 				case 0x95d8: {	// ELPM -- Load Program Memory R0 <- (Z) -- 1001 0101 1101 1000
 					if (!avr->rampz)
@@ -1111,7 +1109,9 @@ SREG();
 					STATE("elpm %s, (Z[%02x:%04x] \t%s)\n",
 					      AVR_REGNAME(0), z >> 16,
 					      z & 0xffff, FAS(z));
-					_avr_set_r(avr, 0, avr->flash[z]);
+					uint8_t v = avr->flash[z];
+					avr_ioctl(avr, AVR_IOCTL_FLASH_LPM, &v);
+					_avr_set_r(avr, 0, v);
 					cycle += 2; // 3 cycles
 				}	break;
 				default:  {
@@ -1132,7 +1132,9 @@ SREG();
 							int op = opcode & 1;
 							STATE("lpm %s, (Z[%04x]%s)\t\t%s\n",
 							      AVR_REGNAME(d), z, op ? "+" : "", FAS(z));
-							_avr_set_r(avr, d, avr->flash[z]);
+							uint8_t v = avr->flash[z];
+							avr_ioctl(avr, AVR_IOCTL_FLASH_LPM, &v);
+							_avr_set_r(avr, d, v);
 							if (op) {
 								z++;
 								_avr_set_r16le_hl(avr, R_ZL, z);
@@ -1148,7 +1150,9 @@ SREG();
 							int op = opcode & 1;
 							STATE("elpm %s, (Z[%02x:%04x]%s)\t\t%s\n",
 							      AVR_REGNAME(d), z >> 16, z & 0xffff, op ? "+" : "", FAS(z));
-							_avr_set_r(avr, d, avr->flash[z]);
+							uint8_t v = avr->flash[z];
+							avr_ioctl(avr, AVR_IOCTL_FLASH_LPM, &v);
+							_avr_set_r(avr, d, v);
 							if (op) {
 								z++;
 								_avr_set_ram(avr, avr->rampz + avr->io_offset, z >> 16);

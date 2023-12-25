@@ -526,6 +526,9 @@ elf_read_firmware(
 
 	/* Scan the section table for .mmcu magic and symbols. */
 
+	if (!firmware->dwarf_file)
+		firmware->dwarf_file = strdup(file);	// Parse later.
+
 	while ((scn = elf_nextscn(elf, scn)) != NULL) {
 		GElf_Shdr shdr;                 /* Section Header */
 		gelf_getshdr(scn, &shdr);
