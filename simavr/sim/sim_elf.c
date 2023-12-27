@@ -373,7 +373,7 @@ elf_parse_mmcu_section(
 }
 
 static int
-elf_copy_segment(int fd, Elf32_Phdr *php, uint8_t **dest)
+elf_copy_segment(int fd, Elf32_Phdr *php, uint8_t **dest, const char *name)
 {
 	int rv;
 
@@ -391,8 +391,8 @@ elf_copy_segment(int fd, Elf32_Phdr *php, uint8_t **dest)
 				rv, php->p_filesz, php->p_vaddr, php->p_offset);
 		return -1;
 	}
-	AVR_LOG(NULL, LOG_DEBUG, "Loaded %d bytes at %x\n",
-			php->p_filesz, php->p_vaddr);
+	AVR_LOG(NULL, LOG_DEBUG, "Loaded %d %s bytes at %x\n",
+			php->p_filesz, name, php->p_vaddr);
 	return 0;
 }
 
@@ -405,7 +405,7 @@ elf_handle_segment(int fd, Elf32_Phdr *php, uint8_t **dest, const char *name)
 				name, php->p_filesz, php->p_vaddr);
 		return -1;
 	} else {
-		elf_copy_segment(fd, php, dest);
+		elf_copy_segment(fd, php, dest, name);
 		return 0;
 	}
 }
@@ -495,7 +495,7 @@ elf_read_firmware(
 				if (!firmware->flash)
 					return -1;
 				where = firmware->flash + firmware->flashsize;
-				elf_copy_segment(fd, php, &where);
+				elf_copy_segment(fd, php, &where, "Initialised data");
 				firmware->flashsize += php->p_filesz;
 			} else {
 				/* If this ever happens, add a second pass. */
