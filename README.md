@@ -2,12 +2,11 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (November 2022) this fork contains some new or updated items.
+At the time of writing (December 2023) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
 + A GUI control panel for a simulated AVR. A picture and a short description are in the guide, below.
-+ ELF format firmware is parsed for debugging information, see below.
 + New IRQs for setting analogue voltages during simulation and for ACOMP.
 + Some additional and some expanded tests.
 + Changes intended to help to add newer core types, such as the ATmega4809.
@@ -30,25 +29,6 @@ The target directory should be the one containing
 <I>mklink</I>
 command creates symbolic links.)
 Alternatively, copy the header files into a subdirectory at that location.
-<P>
-If libdwarf is installed, debugging information is extracted from ELF files,
-including register names and source code line numbers.
-The register names are shown in gdb, while line numbers, register names and
-variable names have been added to instruction tracing output:
-<PRE>
-0164: main                      ldi r24, 0xff
-                                       ->> r24=ff 
-0166: main                      out DDRB, r24[ff]
-                                       ->> DDRB=ff 
-0168: main L.85                 out DDRC, r1[00]
-                                       ->> DDRC=00 
-016a: main L.87                 lds r24[ff], 0x006c             PCMSK1
-                                       ->> r24=00 
-016e: main L.87                 ori r24[00], 0x01
-016e:                                                           SREG = ........
-                                       ->> r24=01 
-0170: main L.87                 sts 0x006c, r24[01]             PCMSK1
-</PRE>
 
 <H3>Getting Started with Simavr. </H3>
 This is a guide to getting started with,
