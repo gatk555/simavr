@@ -734,6 +734,8 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 		STATE("RESET\n");
 //		printf("Bad: %d %d %d %x\n", (avr->pc == 0 && avr->cycle > 0),
 //		avr->pc >= avr->codeend, _avr_sp_get(avr) > avr->ramend, avr->pc);
+	}
+	avr->trace_data->touched[0] = avr->trace_data->touched[1] = avr->trace_data->touched[2] = 0;
 #endif
 
 	/* Ensure we don't crash simavr due to a bad instruction reading past
