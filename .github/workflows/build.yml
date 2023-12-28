@@ -61,7 +61,7 @@ jobs:
         run: | 
           brew install make libelf freeglut patchelf 
           brew tap osx-cross/avr
-          brew install avr-gcc@5 avr-binutils
+          brew install avr-gcc@8 avr-binutils
           export PATH="/usr/local/opt/avr-gcc@5/bin:$PATH"
       - name: CI-Build
         run: |
