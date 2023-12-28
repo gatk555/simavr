@@ -157,7 +157,10 @@ avr_init(
 	avr->data_names = calloc(avr->ioend + 1, sizeof (char *));
 
 	/* put "something" in the serial number */
-	uint32_t r = getpid() + random();
+	uint32_t r;
+
+	srand(getpid());
+	r = rand();
 	for (int i = 0; i < ARRAY_SIZE(avr->serial); i++)
 		avr->serial[i] = r >> (i * 3);
 	AVR_LOG(avr, LOG_TRACE, "%s init\n", avr->mmcu);
