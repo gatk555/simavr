@@ -25,6 +25,10 @@ jobs:
           mv simavr_installed/bin/simavr simavr_installed/bin/simavr.exe
           file simavr_installed/bin/*
           cp -r examples simavr_installed
+      - name: Test
+        run: |
+          cd tests
+          make run_tests
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Windows
@@ -48,6 +52,10 @@ jobs:
           ldd simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
           cp -r examples simavr_installed
+      - name: Test
+        run: |
+          cd tests
+          make run_tests
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for 64-bit Linux
@@ -76,6 +84,10 @@ jobs:
           otool -L simavr_installed/bin/*
           simavr_installed/bin/simavr --list-cores || true
           cp -r examples simavr_installed
+      - name: Test
+        run: |
+          cd tests
+          make run_tests
       - uses: actions/upload-artifact@v3
         with:
           name: Simavr for Mac OS on 64-bit Intel
