@@ -85,6 +85,7 @@ ifeq (${shell uname}, Darwin)
    # directories.  The user must set PATH appropriately:
    #  export PATH=\
    #   "/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$PATH"
+   export PATH="/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$(PATH)"
    AVR			:= avr-
   endif
  endif

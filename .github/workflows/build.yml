@@ -16,7 +16,7 @@ jobs:
           export PATH="/usr/local/opt/avr-gcc@5/bin:$PATH"
       - name: CI-Build
         run: |
-          ln -s /usr/local/Cellar/avr-gcc@5/5.5.0/avr/include/avr simavr/cores/avr
+          ln -s /usr/local/Cellar/avr-gcc@8/8.5.0_1/avr/include/avr simavr/cores/avr
           avr-gcc --version || true
           clang --version
           export CFLAGS="-DGL_SILENCE_DEPRECATION"
@@ -30,7 +30,6 @@ jobs:
       - name: Test
         run: |
           cd tests
-          export PATH="/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$PATH"
           make run_tests
       - uses: actions/upload-artifact@v3
         with:
