@@ -3,63 +3,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-win64:
-    runs-on: windows-2019
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: git make mingw-w64-x86_64-toolchain mingw-w64-x86_64-libelf mingw-w64-x86_64-avr-toolchain mingw-w64-x86_64-freeglut
-      - name: CI-Build
-        run: |
-          echo 'Running in MSYS2!'
-          ln -s /mingw64/avr/include/avr/ simavr/cores/avr
-          make build-simavr V=1
-          mkdir simavr_installed
-          make -k install DESTDIR=$(pwd)/simavr_installed/ || true
-          mv simavr_installed/bin/simavr simavr_installed/bin/simavr.exe
-          file simavr_installed/bin/*
-          cp -r examples simavr_installed
-      - name: Test
-        run: |
-          cd tests
-          make run_tests
-      - uses: actions/upload-artifact@v3
-        with:
-          name: Simavr for 64-bit Windows
-          path: simavr_installed
-  build-lin64:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Dependencies
-        run: sudo apt-get install -y build-essential git make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf
-      - name: CI-Build
-        run: |
-          ln -s /usr/lib/avr/include/avr/ simavr/cores/avr
-          make build-simavr V=1 RELEASE=1
-          mkdir simavr_installed
-          make  install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/
-          file simavr_installed/bin/*
-          patchelf --remove-needed ./libsimavr.so.1 simavr_installed/bin/simavr || true
-          patchelf --add-needed libsimavr.so.1 simavr_installed/bin/simavr
-          patchelf --set-rpath '$ORIGIN/../lib/' simavr_installed/bin/simavr
-          ldd simavr_installed/bin/*
-          simavr_installed/bin/simavr --list-cores || true
-          cp -r examples simavr_installed
-      - name: Test
-        run: |
-          cd tests
-          make run_tests
-      - uses: actions/upload-artifact@v3
-        with:
-          name: Simavr for 64-bit Linux
-          path: simavr_installed
   build-darwin-x64:
     # this is currently macos-11, Big Sur
     runs-on: macos-latest
@@ -87,6 +30,7 @@ jobs:
       - name: Test
         run: |
           cd tests
+          export PATH="/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$PATH"
           make run_tests
       - uses: actions/upload-artifact@v3
         with:

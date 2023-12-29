@@ -81,7 +81,11 @@ ifeq (${shell uname}, Darwin)
    LFLAGS		= -L$(HOMEBREW_PREFIX)/lib/
    CFLAGS		+= -I/$(HOMEBREW_PREFIX)/include/libelf
    AVR_ROOT		:= $(firstword $(wildcard $(HOMEBREW_PREFIX)/Cellar/avr-libc/*/))
-   AVR			:= $(HOMEBREW_PREFIX)/bin/avr-
+   # Homebrew puts avr-gcc binaries and avr-binutils ones into separate
+   # directories.  The user must set PATH appropriately:
+   #  export PATH=\
+   #   "/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$PATH"
+   AVR			:= avr-
   endif
  endif
 else
