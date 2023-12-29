@@ -29,6 +29,7 @@ jobs:
           cp -r examples simavr_installed
       - name: Test
         run: |
+          export PATH="/usr/local/opt/avr-gcc@8/bin:/usr/local/opt/avr-binutils/bin:$PATH"
           cd tests
           make run_tests
       - uses: actions/upload-artifact@v3
