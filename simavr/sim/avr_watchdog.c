@@ -113,9 +113,16 @@ static void avr_watchdog_write(
 	uint8_t old_wdce = avr_regbit_get(avr, p->wdce);
 	
 	uint8_t was_enabled = (old_wde || old_wdie);
+	uint8_t wde_v = avr_regbit_from_value(avr, p->wde, v);
 
-	uint8_t old_v = avr->data[addr]; // allow gdb to see write...
-	avr_core_watch_write(avr, addr, v);
+	uint8_t old_v = avr->data[addr];
+	avr_core_watch_write(avr, addr, v); // allow gdb to see write...
+
+	if (avr_regbit_from_value(avr, p->watchdog.raised, v)) {
+		// Clear interrupt flag on writing one. 
+
+		avr_clear_interrupt(avr, &p->watchdog);
+	}
 
 	if (old_wdce) {
 		uint8_t old_wdp = avr_regbit_get_array(avr, p->wdp, 4);
@@ -132,7 +139,6 @@ static void avr_watchdog_write(
 		avr->data[addr] = old_v;
 		
 		uint8_t wdce_v = avr_regbit_from_value(avr, p->wdce, v);
-		uint8_t wde_v = avr_regbit_from_value(avr, p->wde, v);
 
 		if (wdce_v && wde_v) {
 			avr_regbit_set(avr, p->wdce);
@@ -146,6 +152,16 @@ static void avr_watchdog_write(
 
 			avr_watchdog_set_cycle_count_and_timer(avr, p, was_enabled, -1);
 		}
+	}
+	if (wde_v) {
+		/* Force the clear_both flag on in the interrupt structure
+		 * to get the special behaviour of clearing both enable and
+		 * interrupt flags on interruption.
+		 */
+
+		p->watchdog.clear_both = 1;
+	} else if (!avr_regbit_get(avr, p->wde)) {
+		p->watchdog.clear_both = 0;
 	}
 }
 
@@ -202,16 +218,8 @@ void avr_watchdog_init(avr_t * avr, avr_watchdog_t * p)
 
 	avr_register_io(avr, &p->io);
 
-	/* Force the clear_both flag on in the interrupt structure
-	 * to get the special behaviour of clearing both enable and
-	 * interrupt flags on interruption.
-	 */
-
-	p->watchdog.clear_both = 1;
 	avr_register_vector(avr, &p->watchdog);
-
 	avr_register_io_write(avr, p->wdce.reg, avr_watchdog_write, p);
-
 	p->reset_context.wdrf = 0;
 }
 
