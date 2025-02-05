@@ -1,5 +1,5 @@
-#
-# 	Copyright 2008, 2009 Michel Pollet <buserror@gmail.com>
+# 
+# 	Copyright 2008-2011 Michel Pollet <buserror@gmail.com>
 #
 #	This file is part of simavr.
 #
@@ -16,9 +16,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with simavr.  If not, see <http://www.gnu.org/licenses/>.
 
-target=	simduino
-firm_src = ${wildcard atmega*.c}
-firmware = ${firm_src:.c=.hex}
+target=	sh1106demo
 simavr = ../../
 
 IPATH = .
@@ -29,19 +27,23 @@ IPATH += ${simavr}/simavr/sim
 VPATH = .
 VPATH += ../parts
 
-LDFLAGS += -lpthread -lutil
+LDFLAGS += -lpthread
 
-all: obj ${firmware} ${target}
+include ../Makefile.opengl
+
+all: obj ${target}
 
 include ${simavr}/Makefile.common
 
 board = ${OBJ}/${target}.elf
 
-${board} : ${OBJ}/uart_pty.o
+${board} : ${OBJ}/sh1106_virt.o
+${board} : ${OBJ}/sh1106_glut.o
+${board} : ${OBJ}/button.o
 ${board} : ${OBJ}/${target}.o
 
 ${target}: ${board}
 	@echo $@ done
 
 clean: clean-${OBJ}
-	rm -rf *.a *.axf ${target} *.vcd *.hex
+	rm -rf *.hex *.a *.axf ${target} *.vcd .*.swo .*.swp .*.swm .*.swn

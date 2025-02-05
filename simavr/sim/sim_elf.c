@@ -174,7 +174,7 @@ avr_load_firmware(
 	if (firmware->eeprom && firmware->eesize) {
 		avr_eeprom_desc_t d = {
 				.ee = firmware->eeprom,
-				.offset = 0,
+				.offset = firmware->eeprombase,
 				.size = firmware->eesize
 		};
 		avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &d);
@@ -207,7 +207,7 @@ avr_load_firmware(
 		avr->vcd,
 		firmware->traceperiod >= 1000 ? firmware->traceperiod : 1000);
 
-	AVR_LOG(avr, LOG_TRACE, "Creating VCD trace file '%s'\n",
+	AVR_LOG(avr, LOG_TRACE, "ELF: Creating VCD trace file '%s'\n",
 			avr->vcd->filename);
 
 	for (int ti = 0; ti < firmware->tracecount; ti++) {
@@ -232,8 +232,32 @@ avr_load_firmware(
 								   &bit[firmware->trace[ti].addr],
 								   firmware->trace[ti].mask == 0xff ? 8 : 1,
 								   firmware->trace[ti].name);
+		} else if ( (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8) ||
+		    (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_16) ) {
+			if ((firmware->trace[ti].addr <= 31) || (firmware->trace[ti].addr > avr->ramend)) {
+				AVR_LOG(avr, LOG_ERROR, "ELF: *** Invalid SRAM trace address (0x20 < 0x%04x < 0x%04x )\n", firmware->trace[ti].addr, avr->ramend);
+			} else if (avr->sram_tracepoint_count >= ARRAY_SIZE(avr->sram_tracepoint)) {
+				AVR_LOG(avr, LOG_ERROR, "ELF: *** Too many SRAM traces (limit = %d)\n", ARRAY_SIZE(avr->sram_tracepoint));
+			} else {
+				char name[20];
+				sprintf(name, "sram_tracepoint_%d", avr->sram_tracepoint_count);
+				const char *names[1] = {name};
+				avr_irq_t *irq = avr_alloc_irq(&avr->irq_pool, 0, 1, names);
+				if (irq) {
+					AVR_LOG(avr, LOG_OUTPUT, "ELF: SRAM tracepoint added at '0x%04x' (%s, %d bits)\n", firmware->trace[ti].addr, firmware->trace[ti].name, firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8 ? 8 : 16);
+					avr->sram_tracepoint[avr->sram_tracepoint_count].irq = irq;
+					avr->sram_tracepoint[avr->sram_tracepoint_count].width = firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8 ? 8 : 16;
+					avr->sram_tracepoint[avr->sram_tracepoint_count].addr = firmware->trace[ti].addr;
+					avr_vcd_add_signal(avr->vcd,
+						irq,
+						avr->sram_tracepoint[avr->sram_tracepoint_count].width,
+						firmware->trace[ti].name[0] ? firmware->trace[ti].name : names[0]
+					);
+					avr->sram_tracepoint_count++;
+				}
+			}
 		} else if (firmware->trace[ti].mask == 0xff ||
-				firmware->trace[ti].mask == 0) {
+					firmware->trace[ti].mask == 0) {
 			// easy one
 			avr_irq_t * all = avr_iomem_getirq(avr,
 					firmware->trace[ti].addr,
@@ -336,7 +360,9 @@ elf_parse_mmcu_section(
 #endif
 			case AVR_MMCU_TAG_VCD_PORTPIN:
 			case AVR_MMCU_TAG_VCD_IRQ:
-			case AVR_MMCU_TAG_VCD_TRACE: {
+			case AVR_MMCU_TAG_VCD_TRACE:
+			case AVR_MMCU_TAG_VCD_SRAM_8:
+			case AVR_MMCU_TAG_VCD_SRAM_16: {
 				uint8_t mask = src[0];
 				uint16_t addr = src[1] | (src[2] << 8);
 				char * name = (char*)src + 3;
@@ -391,8 +417,8 @@ elf_copy_segment(int fd, Elf32_Phdr *php, uint8_t **dest, const char *name)
 				rv, php->p_filesz, php->p_vaddr, php->p_offset);
 		return -1;
 	}
-	AVR_LOG(NULL, LOG_DEBUG, "Loaded %d %s bytes at %x\n",
-			php->p_filesz, name, php->p_vaddr);
+	AVR_LOG(NULL, LOG_DEBUG, "ELF: Loaded %d bytes at %x\n",
+			php->p_filesz, php->p_vaddr);
 	return 0;
 }
 
@@ -511,6 +537,7 @@ elf_read_firmware(
 			if (elf_handle_segment(fd, php, &firmware->eeprom, "EEPROM"))
 				continue;
 			firmware->eesize = php->p_filesz;
+			firmware->eeprombase = php->p_vaddr - 0x820000;
 		} else if (php->p_vaddr < 0x830000) {
 			/* Fuses. */
 

@@ -69,8 +69,9 @@ display_usage(
 #endif // CONFIG_PANEL
 	 "       [--input|-i <file>] A VCD file to use as input signals\n"
 	 "       [--output|-o <file>] A VCD file to save the traced signals\n"
-	 "       [--add-trace|-at <name=kind@addr/mask>]\n"
-         "                           Add signal to be included in VCD output\n"
+	 "       [--add-trace|-at    <name=[portpin|irq|trace]@addr/mask>] or \n"
+	 "                           <name=[sram8|sram16]@addr>]\n"
+	 "                           Add signal to be included in VCD output\n"
 	 "       [-ff <.hex file>]   Load next .hex file as flash\n"
 	 "       [-ee <.hex file>]   Load next .hex file as eeprom\n"
 	 "       <firmware>          A .hex or an ELF file. ELF files are\n"
@@ -199,50 +200,31 @@ main(
 				uint16_t addr;
 				char     name[64];
 			} trace;
-			const int n_args = sscanf(argv[pi],
-									  "%63[^=]=%63[^@]@0x%hx/0x%hhx",
-									  &trace.name[0],
-									  &trace.kind[0],
-									  &trace.addr,
-									  &trace.mask);
-			if (n_args != 4) {
+			const int n_args = sscanf(
+				argv[pi],
+				"%63[^=]=%63[^@]@0x%hx/0x%hhx",
+				&trace.name[0],
+				&trace.kind[0],
+				&trace.addr,
+				&trace.mask
+			);
+
+			if ((n_args != 4) &&
+				((n_args != 3) || (strcmp(trace.kind, "sram8") && strcmp(trace.kind, "sram16")))) {
 				--pi;
-				fprintf(stderr,
-						"%s: format for %s is name=kind@addr/mask.\n",
-						argv[0], argv[pi]);
-				exit(1);
-			}
-
-			/****/ if (!strcmp(trace.kind, "portpin")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_PORTPIN;
-			} else if (!strcmp(trace.kind, "irq")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_IRQ;
-			} else if (!strcmp(trace.kind, "trace")) {
-				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_TRACE;
-			} else {
-				fprintf(stderr,
-						"%s: unknown trace kind '%s', "
-						"not one of 'portpin', 'irq', or 'trace'.\n",
-						argv[0], trace.kind);
-				exit(1);
-			}
-			f.trace[f.tracecount].mask = trace.mask;
-			f.trace[f.tracecount].addr = trace.addr;
-			strncpy(f.trace[f.tracecount].name, trace.name,
-                                sizeof(f.trace[f.tracecount].name));
-
-			printf("Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
-				   (f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN) ?
-					   "portpin" :
-					   (f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ) ?
-						   "irq" :
-						   (f.trace[f.tracecount].kind ==
-                                 AVR_MMCU_TAG_VCD_TRACE) ?
-							   "trace" : "unknown",
+				fprintf(stderr, "%s: format for %s is name=kind@addr</mask>.\n", argv[0], argv[pi]);
+				printf(
+				   "Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
+				    f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN ? "portpin"
+				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ     ? "irq"
+				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_TRACE   ? "trace"
+				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_8  ? "sram8"
+				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_16 ? "sram16"
+				   : "unknown",
 				   f.trace[f.tracecount].addr,
 				   f.trace[f.tracecount].mask,
 				   f.trace[f.tracecount].name);
-
+			}
 			++f.tracecount;
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
