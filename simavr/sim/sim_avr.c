@@ -155,7 +155,8 @@ avr_init(
 	avr->trace_data->data_names_size = avr->ioend + 1;
 #endif
 	avr->data_names = calloc(avr->ioend + 1, sizeof (char *));
-
+	avr->io = calloc(avr->ioend - avr->io_offset + 1,
+					 sizeof (struct watch_io));
 	/* put "something" in the serial number */
 #ifdef _WIN32
 	uint32_t r = getpid() + (uint32_t) rand();
@@ -214,6 +215,8 @@ avr_terminate(
 
 	if (avr->flash) free(avr->flash);
 	if (avr->base) free(avr->base);
+	if (avr->io) free(avr->io);
+	if (avr->data_names) free(avr->data_names);
 	if (avr->io_console_buffer.buf) {
 		avr->io_console_buffer.len = 0;
 		avr->io_console_buffer.size = 0;
@@ -221,6 +224,8 @@ avr_terminate(
 		avr->io_console_buffer.buf = NULL;
 	}
 	avr->flash = avr->data = NULL;
+	avr->io = NULL;
+	avr->data_names = NULL;
 }
 
 void

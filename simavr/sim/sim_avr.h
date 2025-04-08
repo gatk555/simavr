@@ -65,9 +65,6 @@ enum {
 	R_SPL	= 0x3d, R_SPH,
 	// Real SREG in IO space.
 	R_SREG	= 0x3f,
-
-	// maximum number of IO registers, on normal AVRs
-	MAX_IOs	= 280,	// Bigger AVRs need more than 256-32 (mega1280)
 };
 
 /* Assume there is an avr pointer about. */
@@ -163,7 +160,7 @@ typedef void (*avr_run_t)(
  * the rest is runtime data (as little as possible)
  */
 typedef struct avr_t {
-	const char *	 	mmcu;	// name of the AVR
+	const char *		mmcu;	// name of the AVR
 	// these are filled by sim_core_declare from constants in /usr/lib/avr/include/avr/io*.h
 	uint16_t			ioend;
 	uint16_t 			ramend;
@@ -190,8 +187,8 @@ typedef struct avr_t {
 	// filled by the ELF data, this allow tracking of invalid jumps
 	uint32_t			codeend;
 
-	int				state;		// stopped, running, sleeping
-	int				saved_state;
+	int					state;		// stopped, running, sleeping
+	int					saved_state;
 	uint32_t			frequency;	// frequency we are running at
 
 	// (Optional) voltages in millivolts.
@@ -284,17 +281,10 @@ typedef struct avr_t {
 	 */
 	avr_flashaddr_t	reset_pc;
 
-	/*
-	 * callback when specific IO registers are read/written.
-	 * There is one drawback here, there is in way of knowing what is the
-	 * "beginning of useful sram" on a core, so there is no way to deduce
-	 * what is the maximum IO register for a core, and thus, we can't
-	 * allocate this table dynamically.
-	 * If you wanted to emulate the BIG AVRs, and XMegas, this would need
-	 * work.
-	 */
-	struct {
-		struct avr_irq_t * irq;	// optional, used only if asked for with avr_iomem_getirq()
+	/* Callback when specific IO registers are read/written. */
+
+	struct watch_io {
+		struct avr_irq_t * irq;	// When asked for with avr_iomem_getirq().
 		struct {
 			void * param;
 			avr_io_read_t c;
@@ -303,7 +293,7 @@ typedef struct avr_t {
 			void * param;
 			avr_io_write_t c;
 		} w;
-	} io[MAX_IOs];
+	} *io;
 
 	/*
 	 * This block allows sharing of the IO write/read on addresses between

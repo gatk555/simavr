@@ -175,7 +175,7 @@ _avr_flash_read16le(
 
 static inline void _call_register_irqs(avr_t * avr, uint16_t addr)
 {
-	if (addr > 31 && addr < 31 + MAX_IOs) {
+	if (addr > 31 && addr <= avr->ioend) {
 		avr_io_addr_t io = AVR_DATA_TO_IO(addr);
 
 		if (avr->io[io].irq) {
@@ -363,21 +363,19 @@ inline void _avr_sp_set(avr_t * avr, uint16_t sp)
  */
 static inline uint8_t _avr_get_ram(avr_t * avr, uint16_t addr)
 {
-	uint16_t io_addr;
+	avr_io_addr_t io = AVR_DATA_TO_IO(addr);
 
-	io_addr = addr - avr->io_offset;
-	if (io_addr == R_SREG) {
+	if (io == R_SREG) {
 		/*
 		 * SREG is special it's reconstructed when read
 		 * while the core itself uses the "shortcut" array
 		 */
 		READ_SREG_INTO(avr, avr->iobase[R_SREG]);
+	} else if (addr >= avr->io_offset && addr <= avr->ioend &&
+			   avr->io[io].r.c) {
+		/* Register read callback. */
 
-	} else if (addr >= avr->io_offset && io_addr < MAX_IOs) {
-		avr_io_addr_t io = AVR_DATA_TO_IO(addr);
-
-		if (avr->io[io].r.c)
-			avr->data[addr] = avr->io[io].r.c(avr, addr, avr->io[io].r.param);
+		avr->data[addr] = avr->io[io].r.c(avr, addr, avr->io[io].r.param);
 	}
 	return avr_core_watch_read(avr, addr);
 }

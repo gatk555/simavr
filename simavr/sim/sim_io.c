@@ -108,11 +108,12 @@ avr_register_io_write(
 		void * param)
 {
 	avr_io_addr_t a = AVR_DATA_TO_IO(addr);
+	int           max_ios = avr->ioend - avr->io_offset + 1;
 
-	if (a >= MAX_IOs) {
+	if (a >= max_ios) {
 		AVR_LOG(avr, LOG_ERROR,
 				"IO: %s(): IO address 0x%04x out of range (max 0x%04x).\n",
-				__func__, a, MAX_IOs);
+				__func__, a, max_ios);
 		avr_abort();
 	}
 	/*
