@@ -132,23 +132,18 @@ avr_init(
 	*((uint16_t*)&avr->flash[avr->flashend + 1]) = AVR_OVERFLOW_OPCODE;
 	avr->codeend = avr->flashend;
 
-	/* Temporary: if simulating a series0/1/2 tiny or mega,
-	 * avr->io_offset will be non-zero.
-	 * That means CPU registers are not memory-mapped.
-	 * Reset it and set up memory ponters.
-	 */
+	/* Allocate data space. */
 
 	required = avr->ramend + 1;
-	if (avr->io_offset)
+	if (!avr->io_offset) // AVRxt: registers not mapped in data space,
 		required += 32;
 	avr->base = calloc(1, required);
 	if (avr->io_offset) {
-		avr->io_offset = 0;
-		avr->data = avr->iobase = avr->base + 32;
-	} else {
 		avr->io_offset = 32;
 		avr->data = avr->base;
 		avr->iobase = avr->base + 32;
+	} else {
+		avr->data = avr->iobase = avr->base + 32;
 	}
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace_data = calloc(1, sizeof(struct avr_trace_data_t));

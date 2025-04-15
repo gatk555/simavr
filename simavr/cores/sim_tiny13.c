@@ -65,6 +65,7 @@ static const struct mcu_t {
 		.signature = { SIGNATURE_0,SIGNATURE_1,SIGNATURE_2 },
 		.fuse = { LFUSE_DEFAULT, HFUSE_DEFAULT },
 #endif
+		.io_offset = 32,
 		.init = init,
 		.reset = reset,
 	},

@@ -92,7 +92,8 @@
 		.extrf = AVR_IO_REGBIT(MCU_STATUS_REG, EXTRF),\
 		.borf = AVR_IO_REGBIT(MCU_STATUS_REG, BORF),\
 		.wdrf = AVR_IO_REGBIT(MCU_STATUS_REG, WDRF)\
-	}
+	}, \
+	.io_offset = 32
 #else
 // Disable signature when using an old avr toolchain
 #define DEFAULT_CORE(_vector_size) \
@@ -100,6 +101,7 @@
 	.ramend = RAMEND, \
 	.flashend = FLASHEND, \
 	.e2end = E2END, \
-	.vector_size = _vector_size
+	.vector_size = _vector_size, \
+	.io_offset = 32
 #endif
 #endif /* __SIM_CORE_DECLARE_H__ */
