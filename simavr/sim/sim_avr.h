@@ -166,6 +166,7 @@ typedef struct avr_t {
 	uint16_t 			ramend;
 	uint32_t			flashend;
 	uint32_t			e2end;
+	uint8_t				flash_as_data; // Set on AVRxt cores.
 	uint8_t				vector_size;
 	// accessible via LPM (BLBSET)
 	uint8_t				fuse[6];

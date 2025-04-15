@@ -251,6 +251,13 @@ void avr_core_watch_write(avr_t *avr, uint16_t addr, uint8_t v)
 uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 {
 	if (addr > avr->ramend) {
+		if (avr->flash_as_data && addr <= avr->ramend + avr->flashend + 1) {
+			/* Access to flash mapped in data spce. */
+
+			if (avr->gdb)
+				avr_gdb_handle_watchpoints(avr, addr, AVR_GDB_WATCH_READ);
+			return avr->flash[addr - avr->ramend - 1];
+		}
 		AVR_LOG(avr, LOG_WARNING,
 				"CORE: *** Wrapping read address "
 				"PC=%04x SP=%04x O=%04x Address %04x %% %04x --> %04x\n"
@@ -263,9 +270,6 @@ uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 	if (avr->gdb) {
 		avr_gdb_handle_watchpoints(avr, addr, AVR_GDB_WATCH_READ);
 	}
-        /* FIX add reading mappped Flash. */
-
-//	_call_register_irqs(avr, addr);
 	return avr->data[addr];
 }
 
@@ -1587,7 +1591,6 @@ SREG();
 
 	}
 	avr->cycle += cycle;
-
 	if ((avr->state == cpu_Running) &&
 		(avr->run_cycle_count > cycle) &&
 		(avr->interrupt_state == 0))
@@ -1596,11 +1599,11 @@ SREG();
 		avr->pc = new_pc;
 		goto run_one_again;
 	} else if (avr->state == cpu_Fault) {
-                /* Pretend previous instruction was never executed. */
+		/* Pretend previous instruction was never executed. */
 
-                avr->cycle -= cycle;
-                new_pc = avr->pc;
-                avr->state = avr->saved_state;
-        }
+		avr->cycle -= cycle;
+		new_pc = avr->pc;
+		avr->state = avr->saved_state;
+	}
 	return new_pc;
 }
