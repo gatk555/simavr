@@ -1,9 +1,5 @@
-/* -*- mode: C; eval:
-   (setq tab-width 4)
-   (setq c-basic-offset 4)
-   (setq indent-tabs-mode t); -*- (emacs magic)
- */
-
+/*
+ -*- mode: C; eval: (setq tab-width 4) (setq c-basic-offset 4) (setq indent-tabs-mode t); -*- (emacs magic) */
 /*
 	run_avr.c
 
@@ -213,18 +209,44 @@ main(
 				((n_args != 3) || (strcmp(trace.kind, "sram8") && strcmp(trace.kind, "sram16")))) {
 				--pi;
 				fprintf(stderr, "%s: format for %s is name=kind@addr</mask>.\n", argv[0], argv[pi]);
-				printf(
-				   "Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
-				    f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN ? "portpin"
-				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ     ? "irq"
-				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_TRACE   ? "trace"
-				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_8  ? "sram8"
-				   : f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_16 ? "sram16"
-				   : "unknown",
-				   f.trace[f.tracecount].addr,
-				   f.trace[f.tracecount].mask,
-				   f.trace[f.tracecount].name);
+				exit(1);
 			}
+
+			/****/ if (!strcmp(trace.kind, "portpin")) {
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_PORTPIN;
+			} else if (!strcmp(trace.kind, "irq")) {
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_IRQ;
+			} else if (!strcmp(trace.kind, "trace")) {
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_TRACE;
+			} else if (!strcmp(trace.kind, "sram8")) {
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_SRAM_8;
+			} else if (!strcmp(trace.kind, "sram16")) {
+				f.trace[f.tracecount].kind = AVR_MMCU_TAG_VCD_SRAM_16;
+			} else {
+				fprintf(
+					stderr,
+					"%s: unknown trace kind '%s', not one of 'portpin', 'irq', or 'trace'.\n",
+					argv[0],
+					trace.kind
+				);
+				exit(1);
+			}
+			f.trace[f.tracecount].mask = trace.mask;
+			f.trace[f.tracecount].addr = trace.addr;
+			strncpy(f.trace[f.tracecount].name, trace.name, sizeof(f.trace[f.tracecount].name));
+
+			printf(
+				"Adding %s trace on address 0x%04x, mask 0x%02x ('%s')\n",
+				  f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_PORTPIN ? "portpin"
+				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_IRQ     ? "irq"
+				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_TRACE   ? "trace"
+				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_8  ? "sram8"
+				: f.trace[f.tracecount].kind == AVR_MMCU_TAG_VCD_SRAM_16 ? "sram16"
+				: "unknown",
+				f.trace[f.tracecount].addr,
+				f.trace[f.tracecount].mask,
+				f.trace[f.tracecount].name
+			);
 			++f.tracecount;
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
@@ -269,8 +291,8 @@ main(
 		exit(1);
 	}
 	avr_init(avr);
-        if (list_irqs)
-			list_all_irqs(f.mmcu);        // Does not return.
+	if (list_irqs)
+		list_all_irqs(f.mmcu);        // Does not return.
 	avr->log = (log > LOG_TRACE ? LOG_TRACE : log);
 #ifdef CONFIG_SIMAVR_TRACE
 	avr->trace = trace;
