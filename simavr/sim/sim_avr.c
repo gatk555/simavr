@@ -96,9 +96,10 @@ avr_get_time_stamp(
 /* The AVR CPU has IRQs for setting external voltages and similar. */
 
 static const char * irq_names[] = {
-	[COMMON_IRQ_VCC] = "32<avr.VCC",
-	[COMMON_IRQ_AVCC] = "32<avr.AVCC",
-	[COMMON_IRQ_AREF] = "32<avr.AREF",
+	[CORE_IRQ_BAD_OPCODE] = ">avr.core.bad_opcode",
+	[CORE_IRQ_VCC] = "32<avr.VCC",
+	[CORE_IRQ_AVCC] = "32<avr.AVCC",
+	[CORE_IRQ_AREF] = "32<avr.AREF",
 };
 
 static void
@@ -108,13 +109,13 @@ avr_adc_irq_notify(
 	avr_t * avr = (avr_t *)param;
 
 	switch (irq->irq) {
-	case COMMON_IRQ_VCC:
+	case CORE_IRQ_VCC:
 		avr->vcc = value;
 		break;
-	case COMMON_IRQ_AVCC:
+	case CORE_IRQ_AVCC:
 		avr->avcc = value;
 		break;
-	case COMMON_IRQ_AREF:
+	case CORE_IRQ_AREF:
 		avr->aref = value;
 		break;
 	}
@@ -124,8 +125,8 @@ int
 avr_init(
 		avr_t * avr)
 {
-	unsigned required;
-	int i;
+	unsigned           required;
+	int                i;
 
 	avr->flash = malloc(avr->flashend + 4);
 	memset(avr->flash, 0xff, avr->flashend + 1);
@@ -169,12 +170,12 @@ avr_init(
 	// cpu is in limbo before init is finished.
 	avr->state = cpu_Limbo;
 	avr->frequency = 1000000;	// can be overridden via avr_mcu_section
-        avr->irq = avr_alloc_irq(&avr->irq_pool, 0,
-								 COMMON_IRQ_COUNT, irq_names);
-	for (i = 0; i < COMMON_IRQ_COUNT; ++i) {
+	avr->irq = avr_alloc_irq(&avr->irq_pool, 0, CORE_IRQ_COUNT, irq_names);
+	for (i = CORE_IRQ_VCC; i < CORE_IRQ_COUNT; ++i) {
 		avr->irq[i].flags |= IRQ_FLAG_FILTERED;
 		avr_irq_register_notify(avr->irq + i, avr_adc_irq_notify, avr);
 	}
+	avr->irq_pool.avr = avr;
 	avr_cmd_init(avr);
 	avr_interrupt_init(avr);
 	if (avr->custom.init)
@@ -229,6 +230,7 @@ avr_reset(
 {
 	AVR_LOG(avr, LOG_TRACE, "%s reset\n", avr->mmcu);
 
+	avr->resetting = 1;
 	avr->state = cpu_Running;
 	for(int i = 0x20; i <= avr->ioend; i++)
 		avr->data[i] = 0;
@@ -247,6 +249,7 @@ avr_reset(
 		port = port->next;
 	}
 	avr->cycle = 0; // Prevent crash
+	avr->resetting = 0;
 }
 
 void
@@ -263,6 +266,47 @@ avr_sadly_crashed(
 	}
 	if (!avr->gdb)
 		avr->state = cpu_Crashed;
+}
+
+/* Get a pointer to a core IRQ. */
+
+avr_irq_t *
+avr_get_core_irq(
+		avr_t * avr,
+		int     irq_no)
+{
+	return avr->irq + irq_no;
+}
+
+/* Get a pointer to a memory IRQ. */
+
+avr_irq_t *avr_get_memory_irq(avr_t * avr, uint16_t addr, int is16)
+{
+	avr_irq_t  *irq;
+	int			width;
+	char        name[32];
+	const char *names[1] = {name};
+
+	if (addr <= 31 || addr > avr->ramend) {
+		AVR_LOG(avr, LOG_ERROR,
+				"Address %#04x out of range for SRAM trace.\n", addr);
+		return NULL;
+	}
+	if (avr->sram_tracepoint_count >= ARRAY_SIZE(avr->sram_tracepoint)) {
+		AVR_LOG(avr, LOG_ERROR, "Too many SRAM traces (limit = %d)\n",
+				ARRAY_SIZE(avr->sram_tracepoint));
+		return NULL;
+	}
+
+	width = is16 ? 16 : 8;
+	sprintf(name, ">%dSRAM_tracepoint_%d", width, avr->sram_tracepoint_count);
+	irq = avr_alloc_irq(&avr->irq_pool, 0, 1, names);
+	if (!irq)
+		return NULL;
+	avr->sram_tracepoint[avr->sram_tracepoint_count].irq = irq;
+	avr->sram_tracepoint[avr->sram_tracepoint_count].width = width;
+	avr->sram_tracepoint[avr->sram_tracepoint_count++].addr = addr;
+	return irq;
 }
 
 void

@@ -332,32 +332,38 @@ avr_load_firmware(
 			bit = avr_get_interrupt_irq(avr, firmware->trace[ti].mask);
 			if (bit && firmware->trace[ti].addr < AVR_INT_IRQ_COUNT)
 				avr_vcd_add_signal(avr->vcd,
-								   &bit[firmware->trace[ti].addr],
-								   firmware->trace[ti].mask == 0xff ? 8 : 1,
-								   firmware->trace[ti].name);
+						&bit[firmware->trace[ti].addr],
+						firmware->trace[ti].mask == 0xff ? 8 : 1,
+						firmware->trace[ti].name);
+		} else if (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_IO_IRQ) {
+			avr_irq_t * irq = avr_io_getirq(avr, firmware->trace[ti].addr, firmware->trace[ti].mask);
+			if (irq)
+				avr_vcd_add_signal(avr->vcd, irq, 8, firmware->trace[ti].name);
 		} else if ( (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8) ||
 		    (firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_16) ) {
-			if ((firmware->trace[ti].addr <= 31) || (firmware->trace[ti].addr > avr->ramend)) {
-				AVR_LOG(avr, LOG_ERROR, "ELF: *** Invalid SRAM trace address (0x20 < 0x%04x < 0x%04x )\n", firmware->trace[ti].addr, avr->ramend);
-			} else if (avr->sram_tracepoint_count >= ARRAY_SIZE(avr->sram_tracepoint)) {
-				AVR_LOG(avr, LOG_ERROR, "ELF: *** Too many SRAM traces (limit = %d)\n", ARRAY_SIZE(avr->sram_tracepoint));
+			avr_irq_t *irq;
+
+			irq = avr_get_memory_irq(
+				avr, firmware->trace[ti].addr,
+				firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_16);
+			if (!irq) {
+				AVR_LOG(avr, LOG_ERROR,
+						"ELF: *** Invalid SRAM trace address "
+						"(0x20 < 0x%04x < 0x%04x) or trace table overflow.\n",
+						firmware->trace[ti].addr, avr->ramend);
 			} else {
-				char name[20];
-				sprintf(name, "sram_tracepoint_%d", avr->sram_tracepoint_count);
-				const char *names[1] = {name};
-				avr_irq_t *irq = avr_alloc_irq(&avr->irq_pool, 0, 1, names);
-				if (irq) {
-					AVR_LOG(avr, LOG_OUTPUT, "ELF: SRAM tracepoint added at '0x%04x' (%s, %d bits)\n", firmware->trace[ti].addr, firmware->trace[ti].name, firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8 ? 8 : 16);
-					avr->sram_tracepoint[avr->sram_tracepoint_count].irq = irq;
-					avr->sram_tracepoint[avr->sram_tracepoint_count].width = firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8 ? 8 : 16;
-					avr->sram_tracepoint[avr->sram_tracepoint_count].addr = firmware->trace[ti].addr;
-					avr_vcd_add_signal(avr->vcd,
-						irq,
-						avr->sram_tracepoint[avr->sram_tracepoint_count].width,
-						firmware->trace[ti].name[0] ? firmware->trace[ti].name : names[0]
-					);
-					avr->sram_tracepoint_count++;
-				}
+				AVR_LOG(avr, LOG_OUTPUT,
+						"ELF: SRAM tracepoint added at '0x%04x' "
+						"(%s, %d bits)\n",
+						firmware->trace[ti].addr, firmware->trace[ti].name,
+						firmware->trace[ti].kind == AVR_MMCU_TAG_VCD_SRAM_8 ?
+							8 : 16);
+				avr_vcd_add_signal(
+					avr->vcd,
+					irq,
+					avr->sram_tracepoint[avr->sram_tracepoint_count].width,
+					firmware->trace[ti].name[0] ?
+					firmware->trace[ti].name : irq->name);
 			}
 		} else if (firmware->trace[ti].mask == 0xff ||
 					firmware->trace[ti].mask == 0) {
@@ -469,7 +475,6 @@ elf_parse_mmcu_section(
 				uint8_t mask = src[0];
 				uint16_t addr = src[1] | (src[2] << 8);
 				char * name = (char*)src + 3;
-
 #if 0
 				AVR_LOG(NULL, LOG_DEBUG,
 						"VCD_TRACE %d %04x:%02x - %s\n", tag,
@@ -478,6 +483,20 @@ elf_parse_mmcu_section(
 				firmware->trace[firmware->tracecount].kind = tag;
 				firmware->trace[firmware->tracecount].mask = mask;
 				firmware->trace[firmware->tracecount].addr = addr;
+				strncpy(firmware->trace[firmware->tracecount].name, name,
+					sizeof(firmware->trace[firmware->tracecount].name));
+				firmware->tracecount++;
+			}	break;
+			case AVR_MMCU_TAG_VCD_IO_IRQ: {
+				uint8_t   mask = src[0];
+				uint32_t  ioctl;
+				char     *name;
+
+				ioctl = AVR_IOCTL_DEF(src[1], src[2], src[3], src[4]);
+				name = (char*)src + 6;
+				firmware->trace[firmware->tracecount].kind = tag;
+				firmware->trace[firmware->tracecount].mask = mask;
+				firmware->trace[firmware->tracecount].addr = ioctl;
 				strncpy(firmware->trace[firmware->tracecount].name, name,
 					sizeof(firmware->trace[firmware->tracecount].name));
 				firmware->tracecount++;
@@ -608,10 +627,8 @@ elf_read_firmware(
 #endif
 		if (php->p_type != PT_LOAD || php->p_filesz == 0)
 			continue;
-		if (php->p_vaddr >= AVR_SEGMENT_OFFSET_LAST) {
+		if (php->p_vaddr >= AVR_SEGMENT_OFFSET_LAST)
 			continue; // Probably .mmcu
-		}
-
 		if (php->p_filesz == 0 && php->p_memsz == 0)
 			continue;		// Unlikely!
 

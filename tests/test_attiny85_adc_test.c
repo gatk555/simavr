@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
 	}
 
 	pip = (const avr_pin_info_t *)0;
-	if (avr_ioctl(avr, AVR_IOCTL_COMMON_GETPINS, &pip) < 0 || !pip ||
+	if (avr_ioctl(avr, AVR_IOCTL_CORE_GETPINS, &pip) < 0 || !pip ||
 	    pip[1].port_letter ||
 	    pip[0].port_letter != 'B' || pip[0].pin != 0) {
 		fail("AVR_IOCTL_COMMON_GETPINS failed.\n");

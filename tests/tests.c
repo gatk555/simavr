@@ -139,12 +139,20 @@ int tests_run_test(avr_t *avr, unsigned long run_usec, int (*run)(avr_t *)) {
 		// setjmp() returned directly, run avr
 		while (1)
 			run(avr);
-	} else if (reason == 1) {
-		// returned from longjmp(); cycle timer fired
-		return reason;
-	} else if (reason == 2) {
-		// returned from special deinit, avr stopped
-		return reason;
+	} else {
+		/* Normal cleanup before exit, includes VCD flush. */
+
+		avr->custom.deinit = NULL;
+		avr_terminate(avr);
+
+		if (reason == 1) {
+			// returned from longjmp(); cycle timer fired
+
+			return reason;
+		} else if (reason == 2) {
+			// returned from special deinit, avr stopped
+			return reason;
+		}
 	}
 	fail("Error in test case: Should never reach this.");
 	return 0;
@@ -255,7 +263,7 @@ void tests_assert_register_receive_avr(avr_t         *avr,
 	struct output_buffer buf;
 
 	init_output_buffer(&buf);
-        avr_register_io_write(avr, reg_addr, reg_output_cb, &buf);
+	avr_register_io_write(avr, reg_addr, reg_output_cb, &buf);
 	tests_assert_xxxx_receive_avr(avr, run_usec, &buf, expected);
 }
 

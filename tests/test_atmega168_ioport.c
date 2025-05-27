@@ -33,6 +33,11 @@ static void monitor_5(struct avr_irq_t *irq, uint32_t value, void *param)
 static void monitor_ddrb(struct avr_irq_t *irq, uint32_t value, void *param)
 {
     LOG("BD-%02X ", value);
+    if (value == 2) {
+        /* Treat this a signal to send input with IRQ IOPORT_IRQ_PIN_ALL_IN. */
+
+		avr_raise_irq(base_irq + IOPORT_IRQ_PIN_ALL_IN, 0x99);
+	}
 }
 
 #ifdef DEBUG // See main()
@@ -57,8 +62,9 @@ static void monitor(struct avr_irq_t *irq, uint32_t value, void *param)
          */
 
         avr_raise_irq(base_irq + IOPORT_IRQ_PIN0, 0);
-    } if (value == 0xf0) {
-        /* Assume this is a combination of 0x30 (direct) and 0xc0 (pullups).
+    } if (value == 0xf1) {
+        /* Assume this is a combination of 0x30 (direct) and 0xc0 (pullups),
+         * with bit 0 retaining its previous output value.
          * So change inputs.
          */
 
@@ -112,13 +118,11 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 
 static const char *expected =
 #ifdef CONFIG_PULL_UPS
-    "P<2A P<70 F<01 I<E4 P<E4 "
+    "P<2A P<F0 F<01 I<E4 P<E4 "
     "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
-    "P>01 J<03 J<00 P<E0 | K | ";
+	"P>01 J<03 J<00 P<E0 | K | P<B8 ";
 #else // Estimated - FIX ME
-    "P<2A P<30 F<01 I<24 P<24 "
-    "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
-    "P>01 J<03 J<00 P<20 | K | ";
+    "P<2A P<F0 F<03 I<E0 P<E0 J<03 J<00 P<E8 | K | P<B8 ";
 #endif
 
 /* This string is expected in variable log. */
@@ -126,20 +130,20 @@ static const char *expected =
 static const char *log_expected =
     "BD-01 d-0F P-00 o-0A P-0A I-0A 5-01 o-09 P-29 d-3C 5-00 P-09 o-F0 5-01 "
 #ifdef CONFIG_PULL_UPS
-    "P-F0 I-70 "                                // Interrupts off testing.
+    "P-F0 I-F0 "                                // Interrupts off testing.
     "o-E0 P-E4 I-E4 I-E4 o-08 5-00 P-C8 "       // External interrupt test.
     "o-00 P-C0 o-08 P-C8 o-00 P-C0 "
     "d-03 o-01 P-C1 o-03 P-C3 "                 // Pin change interrupt test.
     "o-00 P-C0 I-C0 5-01 P-E0 "                 // PORTD = 0 in handler
+	"BD-FF "                                    // iomem IRQ test.
+	"BD-02 5-00 P-98 I-98 5-01 ";               // IOPORT_IRQ_PIN_ALL_IN.
 #else
-    "P-30 I-30 "                                // Interrupts off testing.
-    "o-E0 P-24 I-24 I-24 o-08 5-00 P-08 "       // External interrupt test.
-    "o-00 P-00 o-08 P-08 o-00 P-00 "
-    "d-03 o-01 P-01 o-03 P-03 "                 // Pin change interrupt test.
-    "o-00 P-00 I-00 5-01 P-20 "                 // PORTD = 0 in handler
+    "P-F0 I-F0 "                                // Interrupts off testing.
+    "o-E0 P-E0 I-E0 I-E0 "                      // External interrupt test.
+    "d-03 o-01 P-E1 o-03 P-E3 o-00 P-E8 I-E8 "  // Pin change interrupt test.
+    "BD-FF "                                    // iomem IRQ test.
+    "BD-02 5-00 P-98 I-98 5-01 ";				// IOPORT_IRQ_PIN_ALL_IN.
 #endif
-    "BD-FF ";                                   // iomem IRQ test.
-
 
 int main(int argc, char **argv) {
 	avr_t             *avr;
@@ -147,28 +151,17 @@ int main(int argc, char **argv) {
 	tests_init(argc, argv);
 	avr = tests_init_avr("atmega168_ioport.axf");
 	base_irq = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 0);
+
 	avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN5,
 							monitor_5, NULL);
-	avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN_ALL,
-							monitor, NULL);
+	avr_irq_register_notify(base_irq + IOPORT_IRQ_PIN_ALL, monitor, NULL);
 	avr_irq_register_notify(avr_iomem_getirq(avr, DDRB_ADDR, NULL, 8),
 							monitor_ddrb, NULL);
 	avr_irq_register_notify(base_irq + IOPORT_IRQ_DIRECTION_ALL,
 							reg_write, NULL);
-	avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PORT,
-							reg_write, NULL);
-	avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PIN,
-							reg_read, NULL);
+	avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PORT, reg_write, NULL);
+	avr_irq_register_notify(base_irq + IOPORT_IRQ_REG_PIN, reg_read, NULL);
 
-#ifdef DEBUG
-        /* Debugging aid: put DDRC = x into the firmware to place a
-         * marker at the corresponding place in this program's log.
-         */
-
-    #define DDRC_ADDR (0x7 + 32) // From ATM168 header file.
-	avr_irq_register_notify(avr_iomem_getirq(avr, DDRC_ADDR, NULL, 8),
-        	                monitor_ddrc, NULL);
-#endif
 	/* Tweak DDRB to confirm IO-memory based IRQs are working. */
 
 	avr_core_watch_write(avr, DDRB_ADDR, 1);

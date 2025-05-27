@@ -95,6 +95,16 @@ enum {
 #define AVR_TRACE(avr, ... ) \
 	AVR_LOG(avr, LOG_TRACE, __VA_ARGS__)
 
+/* The core's own IRQS. */
+
+enum {
+	CORE_IRQ_BAD_OPCODE = 0,	// Execution of unknown instruction.
+	CORE_IRQ_VCC,				// External voltages.
+	CORE_IRQ_AVCC,
+	CORE_IRQ_AREF,
+	CORE_IRQ_COUNT,
+};
+
 /*
  * Core states.
  */
@@ -168,6 +178,7 @@ typedef struct avr_t {
 	uint32_t			e2end;
 	uint8_t				flash_as_data; // Set on AVRxt cores.
 	uint8_t				vector_size;
+	uint8_t				resetting; // Set only during avr_reset().
 	// accessible via LPM (BLBSET)
 	uint8_t				fuse[6];
 	uint8_t				lockbits;
@@ -337,9 +348,9 @@ typedef struct avr_t {
 	// queue of io modules
 	struct avr_io_t * io_port;
 
-	// IRQS
+	// Core IRQs
 
-	struct avr_irq_t *	irq;
+	avr_irq_t * irq;
 
 	// Builtin and user-defined commands
 	avr_cmd_table_t commands;
@@ -386,14 +397,9 @@ typedef struct avr_t {
 	const struct avr_pin_info *pin_info;
 } avr_t;
 
-// IRQs for shared analogue voltages and IOCTL to get them.
+// IOCTL to get IRQs for shared analogue voltages.
 
-enum {
-      COMMON_IRQ_VCC = 0, COMMON_IRQ_AVCC, COMMON_IRQ_AREF,
-      COMMON_IRQ_COUNT
-};
-
-#define AVR_IOCTL_COMMON_GETIRQ AVR_IOCTL_DEF('C','P','U','0')
+#define AVR_IOCTL_CORE_GETIRQ AVR_IOCTL_DEF('C','P','U','0')
 
 // Structure to hold assignements of analogue inputs to pins.
 // This information is not currently used inside simavr, but can
@@ -404,7 +410,7 @@ enum {
 // IOCTL to get information on special function pins and indices to
 // the array returned.
 
-#define AVR_IOCTL_COMMON_GETPINS AVR_IOCTL_DEF('C','P','U','p')
+#define AVR_IOCTL_CORE_GETPINS AVR_IOCTL_DEF('C','P','U','p')
 #define AVR_PIN_AREF 0
 #define AVR_PIN_AVCC 1
 
@@ -444,6 +450,21 @@ avr_core_allocate(
 void
 avr_reset(
 		avr_t * avr);
+
+// Get a pointer to a core IRQ.
+
+avr_irq_t *
+avr_get_core_irq(
+		avr_t * avr,
+		int     irq_no);
+
+/* Get a pointer to a memory IRQ. */
+
+avr_irq_t *avr_get_memory_irq(
+		avr_t   * avr,
+		uint16_t  addr,
+		int		  is16);
+
 // run one cycle of the AVR, sleep if necessary
 int
 avr_run(
@@ -557,6 +578,12 @@ const char * avr_regname(avr_t *avr, uint16_t reg);
 /* Use this in preference to abort() so that log or debug gets to files. */
 
 extern void avr_abort(void);
+
+/* This function returns a text string describing where in flash the AVR's
+ * PC is pointing.  It requires the CONFIG_SIMAVR_TRACE option.
+ */
+
+const char *avr_where(avr_t *avr);
 
 #ifdef __cplusplus
 };

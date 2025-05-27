@@ -102,8 +102,8 @@ const char *avr_where(avr_t *avr)
 	return "";
 }
 
-#define STATE(_f, argsf ...)	if (avr->trace) {				\
-	const char *symn = avr_where(avr);							\
+#define STATE(_f, argsf ...)	if (avr->trace) {			\
+	const char *symn = avr_where(avr);						\
 	if (symn)												\
 		printf("%04x: %-25s " _f, avr->pc, symn, ## argsf);	\
 }
@@ -163,6 +163,8 @@ void crash(avr_t* avr)
 	avr_sadly_crashed(avr, 0);
 
 }
+
+const char *avr_where(avr_t *avr) { return ""; }
 #endif
 
 static inline uint16_t
@@ -462,10 +464,28 @@ const char * avr_regname(avr_t *avr, uint16_t reg)
 #define AVR_REGNAME_IO(reg) avr_regname(avr, (reg) + 32 - avr->io_offset)
 
 /*
- * Called when an invalid opcode is decoded
+ * Called when an invalid opcode is decoded.  Updating avr->pc will work.
  */
 static void _avr_invalid_opcode(avr_t * avr)
 {
+	/* This could be an attempt by simulation-aware firmware to summon a demon,
+	 * or other assistance. Raise an IRQ and if the CPU state is changed by
+	 * the call, do not show an error messgae.  In that case a new PC may be
+	 * supplied.
+	 */
+
+	avr_raise_irq(avr->irq + CORE_IRQ_BAD_OPCODE,
+				  _avr_flash_read16le(avr, avr->pc));
+	if (avr->state != cpu_Running) {
+		/* The IRQ may sleep or finish simulation. But if it performed
+		 * a service and now wants to resume, just suppress the error message.
+		 */
+
+		if (avr->state == cpu_StepDone) // Re-use special value for GDB.
+			avr->state = cpu_Running;
+		return;
+	}
+	avr->pc += 2;	// Step over.
 #if CONFIG_SIMAVR_TRACE
 	printf( FONT_RED "*** %04x: %-25s Invalid Opcode SP=%04x O=%04x \n" FONT_DEFAULT,
                 avr->pc,
@@ -872,7 +892,10 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 									avr->sreg[S_Z] = res == 0;
 									SREG();
 								}	break;
-								default: _avr_invalid_opcode(avr);
+								default:
+									_avr_invalid_opcode(avr);
+									new_pc = avr->pc;
+									break;
 							}
 					}
 				}
@@ -920,7 +943,7 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 					_avr_flags_add_zns(avr, res, vd, vr);
 					SREG();
 				}	break;
-				default: _avr_invalid_opcode(avr);
+				default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 			}
 		}	break;
 
@@ -964,7 +987,7 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 					STATE("mov %s, %s[%02x] = %02x\n", AVR_REGNAME(d), AVR_REGNAME(r), vr, res);
 					_avr_set_r(avr, d, res);
 				}	break;
-				default: _avr_invalid_opcode(avr);
+				default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 			}
 		}	break;
 
@@ -1053,7 +1076,7 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 					}
 					cycle += 1; // 2 cycles, 3 for tinyavr
 				}	break;
-				default: _avr_invalid_opcode(avr);
+				default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 			}
 		}	break;
 
@@ -1096,9 +1119,12 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 				case 0x9519: { // EICALL -- Indirect Call to Subroutine -- 1001 0101 0001 1001   bit 8 is "push pc"
 					int e = opcode & 0x10;
 					int p = opcode & 0x100;
-					if (e && !avr->eind)
+					if (e && !avr->eind) {
 						_avr_invalid_opcode(avr);
-					uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
+						new_pc = avr->pc;
+					}
+
+					uint32_t z = avr->data[R_ZL] | (avr->data[R_ZH] << 8);
 					if (e)
 						z |= avr->data[avr->eind] << 16;
 					STATE("%si%s Z[%04x]\n", e?"e":"", p?"call":"jmp", z << 1);
@@ -1130,9 +1156,14 @@ SREG();
 					cycle += 2; // 3 cycles
 				}	break;
 				case 0x95d8: {	// ELPM -- Load Program Memory R0 <- (Z) -- 1001 0101 1101 1000
-					if (!avr->rampz)
+					if (!avr->rampz) {
 						_avr_invalid_opcode(avr);
-					uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) | (avr->data[avr->rampz] << 16);
+						new_pc = avr->pc;
+					}
+
+					uint32_t z;
+					z = avr->data[R_ZL] | (avr->data[R_ZH] << 8) |
+						(avr->data[avr->rampz] << 16);
 					STATE("elpm %s, (Z[%02x:%04x] \t%s)\n",
 					      AVR_REGNAME(0), z >> 16,
 					      z & 0xffff, FAS(z));
@@ -1170,9 +1201,14 @@ SREG();
 						}	break;
 						case 0x9006:
 						case 0x9007: {	// ELPM -- Extended Load Program Memory -- 1001 000d dddd 01oo
-							if (!avr->rampz)
+							if (!avr->rampz) {
 								_avr_invalid_opcode(avr);
-							uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) | (avr->data[avr->rampz] << 16);
+								new_pc = avr->pc;
+							}
+
+							uint32_t z;
+							z = avr->data[R_ZL] | (avr->data[R_ZH] << 8) |
+								(avr->data[avr->rampz] << 16);
 							get_d5(opcode);
 							int op = opcode & 1;
 							STATE("elpm %s, (Z[%02x:%04x]%s)\t\t%s\n",
@@ -1474,6 +1510,8 @@ SREG();
 											SREG();
 										}	break;
 										default: _avr_invalid_opcode(avr);
+											new_pc = avr->pc;
+											break;
 									}
 							}
 						}	break;
@@ -1494,7 +1532,7 @@ SREG();
 					STATE("in %s, %s[%02x]\n", AVR_REGNAME(d), AVR_REGNAME_IO(A), avr->data[A]);
 					_avr_set_r(avr, d, _avr_get_ram(avr, A));
 				}	break;
-				default: _avr_invalid_opcode(avr);
+				default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 			}
 		}	break;
 
@@ -1583,11 +1621,11 @@ SREG();
 						}
 					}
 				}	break;
-				default: _avr_invalid_opcode(avr);
+				default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 			}
 		}	break;
 
-		default: _avr_invalid_opcode(avr);
+		default: _avr_invalid_opcode(avr); new_pc = avr->pc;
 
 	}
 	avr->cycle += cycle;

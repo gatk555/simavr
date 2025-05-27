@@ -250,7 +250,7 @@ sim_setup_firmware(const char * filename, uint32_t loadBase,
 		} else {
 			cp->type = UNKNOWN;
 		}
-printf("Chunk type %d: %d at %#x\n", cp->type, cp->size, cp->addr);
+		printf("Chunk type %d: %d at %#x\n", cp->type, cp->size, cp->addr);
 	}
 	fp->chunks = chunks;
 }
