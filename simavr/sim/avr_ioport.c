@@ -48,6 +48,11 @@ avr_ioport_read(
 	avr_ioport_t * p = (avr_ioport_t *)param;
 	uint8_t ddr = avr->data[p->r_ddr];
 	uint8_t v = (avr->data[p->r_pin] & ~ddr) | (avr->data[p->r_port] & ddr);
+
+#ifdef CONFIG_PULL_UPS
+	v |= avr->data[p->r_port] & ~ddr;
+	v = (v & ~p->external.pull_mask) | p->external.pull_value;
+#endif
 	avr->data[addr] = v;
 	avr_raise_irq(p->io.irq + IOPORT_IRQ_REG_PIN, v);
 	D(if (avr->data[addr] != v) printf("** PIN%c(%02x) = %02x\r\n", p->name, addr, v);)
@@ -96,7 +101,7 @@ avr_ioport_update_port_irqs(
 	uint8_t pin = (avr->data[p->r_pin] & ~ddr) | (avr->data[p->r_port] & ddr);
 
 #ifdef CONFIG_PULL_UPS
-        pin |= avr->data[p->r_port] & ~ddr;
+	pin |= avr->data[p->r_port] & ~ddr;
 	pin = (pin & ~p->external.pull_mask) | p->external.pull_value;
 #endif
 	avr_raise_irq(p->io.irq + IOPORT_IRQ_PIN_ALL, pin);

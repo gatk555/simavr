@@ -47,7 +47,7 @@ static void monitor_ddrc(struct avr_irq_t *irq, uint32_t value, void *param)
 }
 #endif
 
-/* This monitors the simulator's idea of the I/O pin states.
+/* This monitors the simulator's idea of PORTD's I/O pin states.
  * Changes this program makes to inputs are not reported,
  * presumably because the simulator "knows" we made them.
  */
@@ -73,7 +73,7 @@ static void monitor(struct avr_irq_t *irq, uint32_t value, void *param)
     }
 }
 
-/* Writes to output ports and DDR are reported here. */
+/* Writes to PORTD output and DDR are reported here. */
 
 static void reg_write(struct avr_irq_t *irq, uint32_t value, void *param)
 {
@@ -121,8 +121,10 @@ static const char *expected =
     "P<2A P<F0 F<01 I<E4 P<E4 "
     "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
 	"P>01 J<03 J<00 P<E0 | K | P<B8 ";
-#else // Estimated - FIX ME
-    "P<2A P<F0 F<03 I<E0 P<E0 J<03 J<00 P<E8 | K | P<B8 ";
+#else
+    "P<2A P<30 F<01 I<24 P<24 "
+    "L0 L1 L0 L0 L0 F<00 F<02 L2 L0 L0 L0 "
+	"P>01 J<03 J<00 P<20 | K | P<B8 ";
 #endif
 
 /* This string is expected in variable log. */
@@ -138,9 +140,11 @@ static const char *log_expected =
 	"BD-FF "                                    // iomem IRQ test.
 	"BD-02 5-00 P-98 I-98 5-01 ";               // IOPORT_IRQ_PIN_ALL_IN.
 #else
-    "P-F0 I-F0 "                                // Interrupts off testing.
-    "o-E0 P-E0 I-E0 I-E0 "                      // External interrupt test.
-    "d-03 o-01 P-E1 o-03 P-E3 o-00 P-E8 I-E8 "  // Pin change interrupt test.
+    "P-30 I-30 "                                // Interrupts off testing.
+    "o-E0 P-24 I-24 I-24 o-08 5-00 P-08 "       // External interrupt test.
+    "o-00 P-00 o-08 P-08 o-00 P-00 "
+    "d-03 o-01 P-01 o-03 P-03 "                 // Pin change interrupt test.
+    "o-00 P-00 I-00 5-01 P-20 "                 // PORTD = 0 in handler
     "BD-FF "                                    // iomem IRQ test.
     "BD-02 5-00 P-98 I-98 5-01 ";				// IOPORT_IRQ_PIN_ALL_IN.
 #endif
