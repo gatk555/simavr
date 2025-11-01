@@ -29,6 +29,19 @@
 #include "avr_flash.h"
 #include "avr_watchdog.h"
 
+/* ANSI escape codes for colored output. */
+struct text_colors simavr_font = {
+#ifdef NO_COLOR
+	.green  = "",
+	.red    = "",
+	.normal = ""
+#else
+	.green  = "\e[32m",
+	.red    = "\e[31m",
+	.normal = "\e[0m"
+#endif
+};
+
 // SREG bit names
 const char * _sreg_bit_name = "cznvshti";
 
@@ -138,13 +151,15 @@ void crash(avr_t* avr)
 
 	for (int i = OLD_PC_SIZE-1; i > 0; i--) {
 		int pci = (avr->trace_data->old_pci + i) & 0xf;
-		printf(FONT_RED "*** %04x: %-25s RESET -%d; sp %04x\n" FONT_DEFAULT,
+		printf("%s*** %04x: %-25s RESET -%d; sp %04x%s\n",
+                       simavr_font.red,
                        avr->trace_data->old[pci].pc,
                        avr->trace_data->codeline ?
                            avr->trace_data->codeline[avr->trace_data->old[pci].pc>>1] :
                            "unknown",
                        OLD_PC_SIZE-i,
-                       avr->trace_data->old[pci].sp);
+                       avr->trace_data->old[pci].sp,
+                       simavr_font.normal);
 	}
 
 	printf("Stack Ptr %04x/%04x = %d \n", _avr_sp_get(avr), avr->ramend, avr->ramend - _avr_sp_get(avr));
@@ -214,19 +229,15 @@ void _call_sram_irqs(avr_t *avr, uint16_t addr) {
 void avr_core_watch_write(avr_t *avr, uint16_t addr, uint8_t v)
 {
 	if (addr > avr->ramend) {
+		uint16_t ramstart = avr->ioend + 1;
+		uint16_t ramsize = avr->ramend - ramstart + 1;
+		uint16_t wrapped_addr = ramstart + ((addr - ramstart) % ramsize);
 		AVR_LOG(avr, LOG_WARNING,
 				"CORE: *** Wrapping write address "
-				"PC=%04x SP=%04x O=%04x v=%02x Address %04x %% %04x --> %04x\n",
-				avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc), v, addr, (avr->ramend + 1), addr % (avr->ramend + 1));
-		addr = addr % (avr->ramend + 1);
-	}
-
-	if (addr < avr->io_offset) {
-		AVR_LOG(avr, LOG_ERROR, FONT_RED
-				"CORE: *** Invalid write address PC=%04x SP=%04x O=%04x Address %04x=%02x low registers\n"
-				FONT_DEFAULT,
-				avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc), addr, v);
-		crash(avr);
+				"PC=%04x SP=%04x O=%04x Address %04x --> %04x (ramstart=%04x, ramend=%04x)\n",
+				avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc),
+				addr, wrapped_addr, ramstart, avr->ramend);
+		addr = wrapped_addr;
 	}
 #if AVR_STACK_WATCH
 	/*
@@ -235,9 +246,9 @@ void avr_core_watch_write(avr_t *avr, uint16_t addr, uint8_t v)
 	 * frame and is munching on it's own return address.
 	 */
 	if (avr->trace_data->stack_frame_index > 1 && addr > avr->trace_data->stack_frame[avr->trace_data->stack_frame_index-2].sp) {
-		printf( FONT_RED "%04x : munching stack "
-				"SP %04x, A=%04x <= %02x\n" FONT_DEFAULT,
-				avr->pc, _avr_sp_get(avr), addr, v);
+		printf("%s%04x : munching stack "
+				"SP %04x, A=%04x <= %02x%s\n",
+				simavr_font.red, avr->pc, _avr_sp_get(avr), addr, v, simavr_font.normal);
 	}
 #endif
 
@@ -260,13 +271,16 @@ uint8_t avr_core_watch_read(avr_t *avr, uint16_t addr)
 				avr_gdb_handle_watchpoints(avr, addr, AVR_GDB_WATCH_READ);
 			return avr->flash[addr - avr->ramend - 1];
 		}
+
+		uint16_t ramstart = avr->ioend + 1;
+		uint16_t ramsize = avr->ramend - ramstart + 1;
+		uint16_t wrapped_addr = ramstart + ((addr - ramstart) % ramsize);
 		AVR_LOG(avr, LOG_WARNING,
 				"CORE: *** Wrapping read address "
-				"PC=%04x SP=%04x O=%04x Address %04x %% %04x --> %04x\n"
-				FONT_DEFAULT,
+				"PC=%04x SP=%04x O=%04x Address %04x --> %04x (ramstart=%04x, ramend=%04x)\n",
 				avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc),
-				addr, (avr->ramend + 1), addr % (avr->ramend + 1));
-		addr = addr % (avr->ramend + 1);
+				addr, wrapped_addr, ramstart, avr->ramend);
+		addr = wrapped_addr;
 	}
 
 	if (avr->gdb) {
@@ -487,14 +501,16 @@ static void _avr_invalid_opcode(avr_t * avr)
 	}
 	avr->pc += 2;	// Step over.
 #if CONFIG_SIMAVR_TRACE
-	printf( FONT_RED "*** %04x: %-25s Invalid Opcode SP=%04x O=%04x \n" FONT_DEFAULT,
+	printf("%s*** %04x: %-25s Invalid Opcode SP=%04x O=%04x%s\n",
+                simavr_font.red,
                 avr->pc,
                 avr->trace_data->codeline[avr->pc>>1],
                 _avr_sp_get(avr),
-                _avr_flash_read16le(avr, avr->pc));
+                _avr_flash_read16le(avr, avr->pc),
+                simavr_font.normal);
 #else
-	AVR_LOG(avr, LOG_ERROR, FONT_RED "CORE: *** %04x: Invalid Opcode SP=%04x O=%04x \n" FONT_DEFAULT,
-			avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc));
+	AVR_LOG(avr, LOG_ERROR, "%sCORE: *** %04x: Invalid Opcode SP=%04x O=%04x%s\n",
+			simavr_font.red, avr->pc, _avr_sp_get(avr), _avr_flash_read16le(avr, avr->pc), simavr_font.normal);
 #endif
 }
 
@@ -788,9 +804,9 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 	 */
 	if (unlikely(avr->pc >= avr->flashend)) {
 		STATE("CRASH\n");
-		AVR_LOG(avr, LOG_ERROR, FONT_RED
-				"avr->pc >= avr->flashend\n"
-				FONT_DEFAULT);
+		AVR_LOG(avr, LOG_ERROR,
+				"%savr->pc >= avr->flashend%s\n",
+                simavr_font.red, simavr_font.normal);
 		crash(avr);
 		return 0;
 	}

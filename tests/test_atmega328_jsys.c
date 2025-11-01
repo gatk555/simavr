@@ -66,7 +66,7 @@ static void jsys_handler(struct avr_irq_t *irq, uint32_t value, void *param)
 			/* Print a string embedded in the flash. */
 
 			++pc;
-			printf((const char *)pc);	/* Can not use return value!. */
+			printf("%s", (const char *)pc);	/* Can not use return value!. */
 			pc += strlen((const char *)pc);
 			break;
 		}
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 	uint8_t  inner, outer;
 
 	tests_init(argc, argv);
-	avr = tests_init_avr("atmega328pb_jsys.axf");
+	avr = tests_init_avr("atmega328_jsys.axf");
 
 	avr_irq_register_notify(avr_get_core_irq(avr, CORE_IRQ_BAD_OPCODE),
 							jsys_handler, avr);
