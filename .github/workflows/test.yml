@@ -10,8 +10,9 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -36,8 +37,9 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW32
@@ -65,8 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -92,8 +95,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - name: Install Dependencies
         run: | 
           sudo dpkg --add-architecture i386
@@ -125,8 +129,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -156,8 +161,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -187,8 +193,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -218,8 +225,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        repository: gatk555/simavr
-        ref: test
+        with:
+          repository: gatk555/simavr
+          ref: test
       - name: Install Dependencies
         run: | 
           HOMEBREW_NO_INSTALL_FROM_API=1 brew install make libelf freeglut patchelf 
