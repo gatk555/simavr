@@ -201,7 +201,7 @@ jobs:
           path: simavr.tar.gz
   build-darwin-x64:
     # this is currently macos-11, Big Sur
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v6
       - name: Install Dependencies
