@@ -400,7 +400,7 @@ avr_service_interrupts(
 		avr_raise_irq(vp->irq + AVR_INT_IRQ_RUNNING, 1);
 		avr_raise_irq(table->irq + AVR_INT_IRQ_RUNNING, vp->vector);
 		if (table->running_ptr == ARRAY_SIZE(table->running)) {
-			AVR_LOG(avr, LOG_ERROR, "%s run out of nested stack!", __func__);
+			AVR_LOG(avr, LOG_ERROR, "%s run out of nested stack! vector=%d", __func__, vp->vector);
 		} else {
 			table->running[table->running_ptr++] = vp->vector;
 		}

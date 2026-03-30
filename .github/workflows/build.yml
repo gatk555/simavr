@@ -65,8 +65,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -92,8 +90,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - name: Install Dependencies
         run: | 
           sudo dpkg --add-architecture i386
@@ -125,8 +121,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -156,8 +150,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -187,8 +179,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -214,33 +204,44 @@ jobs:
           name: Linux AArch64
           path: simavr.tar.gz
   build-darwin-x64:
-    # this is currently macos-11, Big Sur
+    # macos-latest is an ARM architecture runner, you need to use the suffix -intel
     runs-on: macos-15-intel
     steps:
+      - uses: actions/checkout@v6
       - name: Install Dependencies
         run: | 
           HOMEBREW_NO_INSTALL_FROM_API=1 brew install make libelf freeglut patchelf 
           HOMEBREW_NO_INSTALL_FROM_API=1 brew tap osx-cross/avr
-          HOMEBREW_NO_INSTALL_FROM_API=1 brew install libelf
-      - uses: actions/checkout@v6
-        with:
-          repository: gatk555/simavr
-          ref: tools
-          fetch-depth: 0
-      - name: Install avr-gcc
+      - name: CI-Build
         run: |
-          here = `pwd`
-          mkdir -p /usr/local/Cellar/avr-gcc@9 
-          cd /usr/local/Cellar/avr-gcc@9
-          unzip $here/tools/avr-gcc9-macos-x64.zip
-          mkdir -p /usr/local/Cellar/avr-binutils
-          cd /usr/local/Cellar/avr-binutils
-          unzip $here/tools/avr-binutils-macos-x64.zip
+          avr-gcc --version || true
+          clang --version
+          export CFLAGS="-DGL_SILENCE_DEPRECATION"
+          make -j4 build-simavr V=1 RELEASE=1
+          mkdir simavr_installed
+          make -k -j4 install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/ || true
+          file simavr_installed/bin/*
+          otool -L simavr_installed/bin/*
+          simavr_installed/bin/simavr --list-cores || true
+      - name: Tar files
+        run: tar -cvf simavr.tar.gz -C simavr_installed .
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Mac OS Intel 64-bit
+          path: simavr.tar.gz
+  build-darwin-arm64:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Dependencies
+        run: |
+          HOMEBREW_NO_INSTALL_FROM_API=1 brew install make libelf freeglut patchelf
+          HOMEBREW_NO_INSTALL_FROM_API=1 brew tap osx-cross/avr
+          HOMEBREW_NO_INSTALL_FROM_API=1 brew install libelf
+          export PATH="/usr/local/opt/avr-gcc@9/bin:$PATH"
       - uses: actions/checkout@v6
         with:
           repository: gatk555/simavr
-          ref: main
-          fetch-depth: 0
       - name: CI-Build
         run: |
           export PATH="/usr/local/Cellar/avr-gcc@9/9.5.0/bin:/usr/local/Cellar/avr-binutils/2.45.1/bin:$PATH"
@@ -257,5 +258,5 @@ jobs:
         run: tar -cvf simavr.tar.gz -C simavr_installed .
       - uses: actions/upload-artifact@v6
         with:
-          name: Mac OS Intel 64-bit
+          name: Mac OS ARM 64-bit
           path: simavr.tar.gz

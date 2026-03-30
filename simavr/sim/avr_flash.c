@@ -59,7 +59,7 @@ avr_flash_clear_temppage(
 		avr_flash_t *p)
 {
 	for (int i = 0; i < p->spm_pagesize / 2; i++) {
-		p->tmppage[i] = 0xff;
+		p->tmppage[i] = 0xffff;
 		p->tmppage_used[i] = 0;
 	}
 }
@@ -127,7 +127,7 @@ avr_flash_ioctl(
 				avr_cycle_timer_cancel(avr, avr_progen_clear, p);
 
 				if (avr_regbit_get(avr, p->pgers)) {
-					z &= ~1;
+					z &= ~(p->spm_pagesize - 1);
 					AVR_LOG(avr, LOG_TRACE, "FLASH: Erasing page %04x (%d)\n", (z / p->spm_pagesize), p->spm_pagesize);
 					for (int i = 0; i < p->spm_pagesize; i++)
 						avr->flash[z++] = 0xff;
