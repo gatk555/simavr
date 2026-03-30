@@ -10,11 +10,13 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
-          install: make mingw-w64-x86_64-toolchain mingw-w64-x86_64-libelf mingw-w64-x86_64-avr-toolchain  mingw-w64-x86_64-freeglut
+          install: make mingw-w64-x86_64-toolchain mingw-w64-x86_64-libelf mingw-w64-x86_64-libdwarf mingw-w64-x86_64-avr-toolchain  mingw-w64-x86_64-freeglut
       - name: CI-Build
         run: |
           echo 'Running in MSYS2!'
@@ -34,11 +36,13 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW32
           update: true
-          install: make mingw-w64-i686-toolchain mingw-w64-i686-libelf mingw-w64-i686-freeglut unzip
+          install: make mingw-w64-i686-toolchain mingw-w64-i686-libelf mingw-w64-i686-libdwarf mingw-w64-i686-freeglut unzip
       - name: Install AVR toolchain
         run: |
           wget "https://github.com/ZakKemble/avr-gcc-build/releases/download/v14.1.0-1/avr-gcc-14.1.0-x86-windows.zip"
@@ -61,10 +65,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf
+          sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev libdwarf-dev freeglut3-dev patchelf
       - name: CI-Build
         run: |
           make build-simavr V=1 RELEASE=1
@@ -86,11 +92,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Install Dependencies
         run: | 
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y libstdc++6:i386 libgcc1:i386 zlib1g:i386 libncurses5:i386 gcc-9:i386 binutils:i386 cpp-9:i386 libelf-dev:i386 freeglut3-dev:i386 gcc-avr avr-libc patchelf
+          sudo apt-get install -y libstdc++6:i386 libgcc1:i386 zlib1g:i386 libncurses5:i386 gcc-9:i386 binutils:i386 cpp-9:i386 libelf-dev:i386 libdwarf-dev:i386 freeglut3-dev:i386 gcc-avr avr-libc patchelf
           ls -l /usr/bin/*gcc*
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 10
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 20
@@ -117,6 +125,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -127,7 +137,7 @@ jobs:
           commands: |
             df -h /
             sudo apt-get update
-            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf file
+            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev libdwarf-dev freeglut3-dev patchelf file
             make -j4 build-simavr V=1 RELEASE=1
             mkdir simavr_installed
             make -j4 install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/
@@ -146,6 +156,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -156,7 +168,7 @@ jobs:
           commands: |
             df -h /
             sudo apt-get update
-            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf file
+            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev libdwarf-dev freeglut3-dev patchelf file
             make build-simavr V=1 RELEASE=1
             mkdir simavr_installed
             make install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/
@@ -175,6 +187,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pguyot/arm-runner-action@v2
         id: build_image
         with:
@@ -184,7 +198,7 @@ jobs:
           image_additional_mb: 1024
           commands: |
             df -h /
-            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev freeglut3-dev patchelf file
+            sudo apt-get install -y build-essential make gcc-avr avr-libc libelf-dev libdwarf-dev freeglut3-dev patchelf file
             make -j4 build-simavr V=1 RELEASE=1
             mkdir simavr_installed
             make -j4 install RELEASE=1 DESTDIR=$(pwd)/simavr_installed/
@@ -203,15 +217,33 @@ jobs:
     # this is currently macos-11, Big Sur
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v6
       - name: Install Dependencies
         run: | 
           HOMEBREW_NO_INSTALL_FROM_API=1 brew install make libelf freeglut patchelf 
           HOMEBREW_NO_INSTALL_FROM_API=1 brew tap osx-cross/avr
-          HOMEBREW_NO_INSTALL_FROM_API=1 brew install avr-gcc@9 avr-binutils
-          export PATH="/usr/local/opt/avr-gcc@9/bin:$PATH"
+          HOMEBREW_NO_INSTALL_FROM_API=1 brew install libelf
+      - uses: actions/checkout@v6
+        with:
+          repository: gatk555/simavr
+          ref: tools
+          fetch-depth: 0
+      - name: Install avr-gcc
+        run: |
+          here = `pwd`
+          mkdir -p /usr/local/Cellar/avr-gcc@9 
+          cd /usr/local/Cellar/avr-gcc@9
+          unzip $here/tools/avr-gcc9-macos-x64.zip
+          mkdir -p /usr/local/Cellar/avr-binutils
+          cd /usr/local/Cellar/avr-binutils
+          unzip $here/tools/avr-binutils-macos-x64.zip
+      - uses: actions/checkout@v6
+        with:
+          repository: gatk555/simavr
+          ref: main
+          fetch-depth: 0
       - name: CI-Build
         run: |
+          export PATH="/usr/local/Cellar/avr-gcc@9/9.5.0/bin:/usr/local/Cellar/avr-binutils/2.45.1/bin:$PATH"
           avr-gcc --version || true
           clang --version
           export CFLAGS="-DGL_SILENCE_DEPRECATION"
@@ -227,11 +259,3 @@ jobs:
         with:
           name: Mac OS Intel 64-bit
           path: simavr.tar.gz
-      - uses: actions/upload-artifact@v6
-        with:
-          name: avr-binutils-macos-x64
-          path: /usr/local/Cellar/avr-binutils
-      - uses: actions/upload-artifact@v6
-        with:
-          name: avr-gcc9-macos-x64
-          path: /usr/local/Cellar/avr-gcc@9
