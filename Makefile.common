@@ -238,7 +238,9 @@ endif
 ${OBJ}/%.so: ${OBJ}/%.so.1
 	ln -sf ${notdir $<} $@
 
-obj: ${OBJ}
+
+obj:
+	${E}mkdir -p ${OBJ}
 
 ${OBJ}:
 	${E}mkdir -p ${OBJ}
