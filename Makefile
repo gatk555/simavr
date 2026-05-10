@@ -7,7 +7,7 @@
 # For package building, you will need to pass RELEASE=1 to make
 RELEASE	?= 0
 
-DESTDIR = /usr/local
+DESTDIR ?= /usr/local
 PREFIX = ${DESTDIR}
 
 .PHONY: doc
@@ -26,13 +26,27 @@ build-examples: build-simavr
 build-parts: build-examples
 	$(MAKE) -C examples/parts RELEASE=$(RELEASE)
 
+run_tests: build-simavr build-tests
+	$(MAKE) -C tests run_tests
+
 install: install-simavr install-parts
+
+install-all: install install-examples install-tests
 
 install-simavr:
 	$(MAKE) -C simavr install RELEASE=$(RELEASE) DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 
 install-parts:
 	$(MAKE) -C examples/parts install RELEASE=$(RELEASE) DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
+
+install-examples:
+	mkdir -m744 -p $(DESTDIR)/examples
+	for i in examples/board_* ; do cp $$i/*.axf $$i/*.elf $$i/*hex $$i/obj*/*.elf $(DESTDIR)/examples 2>/dev/null || true ; done
+
+install-tests:
+	mkdir -m744 -p $(DESTDIR)/tests
+	cd tests ; cp obj*/*.tst *.axf *.hex *.in $(DESTDIR)/tests
+
 
 doc:
 	$(MAKE) -C doc RELEASE=$(RELEASE)

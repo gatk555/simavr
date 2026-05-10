@@ -29,6 +29,11 @@ include ../Makefile.opengl
 
 objects := $(patsubst %.c,${OBJ}/%.o, $(wildcard *.c))
 
+# Remove uart_pty.o on Windows
+ifeq (${shell uname -o}, Msys)
+objects := $(filter-out %uart_pty.o, $(objects))
+endif
+
 # Unless the VHCI_USB env var is set, don't build this because it requires
 # a supporting library to be installed. See examples/extra_board_usb/README
 # for details on how to build it.
