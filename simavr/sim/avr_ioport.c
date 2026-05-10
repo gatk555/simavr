@@ -154,16 +154,20 @@ avr_ioport_irq_notify(
 		void * param)
 {
 	avr_ioport_t * p = (avr_ioport_t *)param;
-	avr_t * avr = p->io.avr;
-	int output = value & AVR_IOPORT_OUTPUT;
-	uint8_t mask = irq->irq == IOPORT_IRQ_PIN_ALL_IN ? 0xff : (1 << irq->irq);
-	uint8_t ddr = avr->data[p->r_ddr];
-	uint8_t new_pin;
+	avr_t        * avr = p->io.avr;
+	int            output = value & AVR_IOPORT_OUTPUT;
+	uint8_t        ddr = avr->data[p->r_ddr];
+	uint8_t        mask, new_pin, old_value;
 
+	if (irq->irq == IOPORT_IRQ_PIN_ALL_IN)
+		mask = 0xff;
+	else
+		mask = (1 << irq->irq);
 	value &= 0xff;
 	if (value && irq->irq != IOPORT_IRQ_PIN_ALL_IN)
 		value = mask;
 	new_pin = (avr->data[p->r_pin] & ~mask) | (value & mask);
+	old_value = irq->value;
 
 	if (output) {
 		uint8_t new_out;
@@ -208,7 +212,7 @@ avr_ioport_irq_notify(
 		// Ignore lingering copy of AVR_IOPORT_OUTPUT, or
 		// differing non-zero values.
 
-		if (!value == !(irq->value & 0xff))
+		if (!value == !(old_value & 0xff))
 			return;
 
 		// if the pcint bit is on, try to raise it
