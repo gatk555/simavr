@@ -13,7 +13,7 @@ static void reg_write(struct avr_irq_t *irq, uint32_t value, void *param)
 
     /* Set the output flag on the first three calls. */
 
-    flag = (count++ < 3) ? AVR_IOPORT_OUTPUT : 0;
+    flag = (++count < 2) ? AVR_IOPORT_OUTPUT : 0;
     avr_raise_irq(twiddle_irq, (twiddle_irq->value ^ 1) | flag);
 }
 

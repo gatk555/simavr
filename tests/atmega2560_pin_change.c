@@ -59,7 +59,7 @@ int main()
     /* Test for interrupt caused external (timer) peripheral: no interrupt. */
 
     PORTA = 0xff;                  // Triggers output to PORTB/4, no output.
-    PORTA = 0x0f;                  // Toogle output bit back to zero.
+    PORTB = 0;                     // Toggle fake output bit back to zero.
     DDRB = 0xff;                   // Set ports for output.
     buffer[interrupts++] = ' ';
 
