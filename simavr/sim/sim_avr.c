@@ -273,7 +273,7 @@ _avr_io_console_write(
 		uint8_t v,
 		void * param)
 {
-	if (v == '\r' && avr->io_console_buffer.buf) {
+    if (v == '\n' && avr->io_console_buffer.buf) {
 		avr->io_console_buffer.buf[avr->io_console_buffer.len] = 0;
 		AVR_LOG(avr, LOG_OUTPUT, "%s%s%s\n",
 			simavr_font.blue, avr->io_console_buffer.buf, simavr_font.normal);
