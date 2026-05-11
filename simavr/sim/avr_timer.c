@@ -78,18 +78,20 @@ avr_timer_comp(
 		uint8_t raise_interrupt)
 {
 	avr_t * avr = p->io.avr;
+	uint8_t mode = avr_regbit_get(avr, p->comp[comp].com);
+	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
+	uint32_t flags = 0;
+
 	if (raise_interrupt) {
 	   avr_raise_interrupt(avr, &p->comp[comp].interrupt);
 	}
 
 	// check output compare mode and set/clear pins
-	uint8_t mode = avr_regbit_get(avr, p->comp[comp].com);
-	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
 
-		uint32_t flags = 0;
-		if (p->comp[comp].com_pin.reg)	// we got a physical pin
-				flags |= AVR_IOPORT_OUTPUT;
-		AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);
+	if (p->comp[comp].com_pin.reg)	// we got a physical pin
+		flags |= AVR_IOPORT_OUTPUT;
+	AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n",
+			irq, mode, when);
 	switch (mode) {
 		case avr_timer_com_normal: // Normal mode OCnA disconnected
 			break;
@@ -126,6 +128,10 @@ avr_timer_comp_on_tov(
 	// check output compare mode and set/clear pins
 	uint8_t mode = avr_regbit_get(avr, p->comp[comp].com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
+	uint32_t flags = 0;
+
+	if (p->comp[comp].com_pin.reg)	// we got a physical pin
+		flags |= AVR_IOPORT_OUTPUT;
 
 	// only PWM modes have special behaviour on overflow
 	if((p->wgm_op_mode_kind != avr_timer_wgm_pwm) &&
@@ -138,10 +144,10 @@ avr_timer_comp_on_tov(
 		case avr_timer_com_toggle: // toggle on compare match => on tov do nothing
 			break;
 		case avr_timer_com_clear: // clear on compare match => set on tov
-			avr_raise_irq(irq, 1);
+			avr_raise_irq(irq, 1 | flags);
 			break;
 		case avr_timer_com_set: // set on compare match => clear on tov
-			avr_raise_irq(irq, 0);
+			avr_raise_irq(irq, 0 | flags);
 			break;
 	}
 }
