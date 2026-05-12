@@ -55,15 +55,15 @@ typedef struct avr_vcd_signal_t {
 	 * For VCD input, this is the IRQ we broadcast the values to
 	 */
 	avr_irq_t 		irq;
-	char 			alias;			// vcd one character alias
+	char 			alias[8];		// VCD alias
 	uint8_t			size;			// in bits
 	char 			name[32];		// full human name
 } avr_vcd_signal_t, *avr_vcd_signal_p;
 
 typedef struct avr_vcd_log_t {
-	uint64_t 		when;			// Cycles for output,
+	uint64_t 		when;	// Cycles for output,
 							//     nS for input.
-	uint64_t			sigindex : 8,	// index in signal table
+	uint64_t		sigindex : 8,	// index in signal table
 					floating : 1,
 					value : 32;
 } avr_vcd_log_t, *avr_vcd_log_p;
