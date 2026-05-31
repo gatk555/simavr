@@ -31,6 +31,8 @@ from source can be found in the PDF manual or
 the Bulid Guide page of the github Wiki.
 Updated instructions for Windows are
 <A href="https://github.com/maxgerhardt/simavr">here.</A>
+Binaries for common hardware/OS combinations can be downloaded
+from the main Github site.  Look for "Actions".
 <P>
 Suppose you have downloaded and (if necessary) built simavr.
 Now what?
@@ -128,6 +130,12 @@ So
 will trace the state of pin 2 on port B, and execution of the
 interrupt handler for vector 3.
 <P>
+Changes to memory may also be traced, With run-avr, use the form:
+<PRE>
+  --add-trace name=[sram8|sram16]@addr
+</PRE>
+where the keyword select byte or word access.
+<P>
 VCD files for input must follow a convention for variable names
 so that they match the
 <I>printf()</I>
@@ -136,6 +144,10 @@ format
 The inserted values correspond to the last two arguments to
 <I>avr_io_getirq(),</I>
 described below.
+The simulator exits after reaching the end of a VCD input file,
+so it may be necessary to insert a dummy value change with a large
+time-stamp at the end.
+<P>
 If input files require translation,
 another program,
 <A href="http://vcdmaker.org/">
@@ -245,9 +257,9 @@ Buttons labelled "SoR" are for Stop-on-read: execution will
 be halted when the AVR reads that input source.
 The button changes from red to green when the halt occurs.
 A new input value can then be entered and execution continued.
+The GPIO ports have "SoW" (Stop-on-Write) buttons that work similarly.
 Use the Enter key after entering new ADC inputs,
 otherwise they are visible but not sent.
-The GPIO ports now also have "SoW" (Stop-on-Write) buttons that work similarly.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file

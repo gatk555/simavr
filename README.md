@@ -2,7 +2,7 @@ This repository is a fork from the original [here.](https://github.com/buserror/
 
 New Features
 ------------
-At the time of writing (December 2023) this fork contains some new or updated items.
+At the time of writing (May 2025) this fork contains some new or updated items.
 
 + A brief "Getting Started" guide, intended for new users.  See below, but the
 HTML file in the doc directory looks better.  Github's HTML processing is a little off.
@@ -55,9 +55,11 @@ you will also probably need the C library,
 Instructions for building
 <I>simavr</I>
 from source can be found in the PDF manual or
-the Bulid Guide page of the github Wiki.
+the Build Guide page of the github Wiki.
 Updated instructions for Windows are
 <A href="https://github.com/maxgerhardt/simavr">here.</A>
+Binaries for common hardware/OS combinations can be downloaded
+from the main Github site.  Look for "Actions".
 <P>
 Suppose you have downloaded and (if necessary) built simavr.
 Now what?
@@ -116,7 +118,7 @@ and
 <A href="https://sourceforge.net/projects/simutron/">
 <I>simutron</I>
 </A>
-They are both larger graphical circuit designer/emulator that include simavr
+They are both larger graphical circuit designer/emulators that include simavr
 as a component and have various input devices whose actions can be captured
 as VCD files.
 <P>
@@ -155,6 +157,12 @@ So
 will trace the state of pin 2 on port B, and execution of the
 interrupt handler for vector 3.
 <P>
+Changes to memory may also be traced, With run-avr, use the form:
+<PRE>
+  --add-trace name=[sram8|sram16]@addr
+</PRE>
+where the keyword select byte or word access.
+<P>
 VCD files for input must follow a convention for variable names
 so that they match the
 <I>printf()</I>
@@ -163,6 +171,10 @@ format
 The inserted values correspond to the last two arguments to
 <I>avr_io_getirq(),</I>
 described below.
+The simulator exits after reaching the end of a VCD input file,
+so it may be necessary to insert a dummy value change with a large
+time-stamp at the end.
+<P>
 If input files require translation,
 another program,
 <A href="http://vcdmaker.org/">
@@ -272,9 +284,9 @@ Buttons labelled "SoR" are for Stop-on-read: execution will
 be halted when the AVR reads that input source.
 The button changes from red to green when the halt occurs.
 A new input value can then be entered and execution continued.
+The GPIO ports have "SoW" (Stop-on-Write) buttons that work similarly.
 Use the Enter key after entering new ADC inputs,
 otherwise they are visible but not sent.
-The GPIO ports now also have "SoW" (Stop-on-Write) buttons that work similarly.
 <P>
 If <I>"--panel"</I> is used with <I>"--output"</I>,
 the inputs from the control panel are captured in a separate VCD file
