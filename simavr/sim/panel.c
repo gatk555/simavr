@@ -116,6 +116,10 @@ static long unsigned int  Last_stamp = (long unsigned int)-1;
 
 static int Blink_input_active;
 
+static avr_cycle_count_t burst_complete(struct avr_t      *avr,
+                                        avr_cycle_count_t  when,
+                                        void              *param);
+
 /* Ask Blink for the number of cycles to simulate. */
 
 static void get_next_burst(void)
@@ -134,13 +138,15 @@ static void get_next_burst(void)
     } while (Brc.burst == 0);
 }
 
+static void update_core(avr_t *avr)
+{
+    Bfp->new_value(PC_handle, avr->pc);         // Update PC ...
+    Bfp->new_value(Cycles_handle, avr->cycle);  // and cycle count.
+}
+
 /* Stop the simulation when some event occurs.  Argument is the
  * local handle for the control button for the cause of the stop.
  */
-
-static avr_cycle_count_t burst_complete(struct avr_t      *avr,
-                                        avr_cycle_count_t  when,
-                                        void              *param);
 
 static void stop_on_event(avr_t *avr, Sim_RH button)
 {
@@ -154,6 +160,7 @@ static void stop_on_event(avr_t *avr, Sim_RH button)
 
     Bfp->stopped();                             /* Notify UI. */
     Bfp->new_flags(button, 1);                  /* Change lamp colour. */
+    update_core(avr);                           /* Show current state. */
 
     /* Get next execution burst from Blink. */
 
@@ -570,7 +577,7 @@ static void start_vcd(avr_t *avr, elf_firmware_t *fwp,
 
 static void port_reg(char port_letter, struct port *pp)
 {
-    Blink_RH   row;
+    Blink_CH   row;
     char       name_buff[8];
 
     sprintf(name_buff, "PORT%c", port_letter);
@@ -579,13 +586,13 @@ static void port_reg(char port_letter, struct port *pp)
                       RO_SENSITIVITY | RO_ALT_COLOURS, row);
     Bfp->add_register("SoW", PORT_HANDLE(pp, SOW), 1, RO_ALT_COLOURS, row);
     Bfp->add_register("SoR", PORT_HANDLE(pp, SOR), 1, RO_ALT_COLOURS, row);
-    Bfp->close_row(row);
+    Bfp->add_to_container(row, NULL);
     Bfp->new_flags(PORT_HANDLE(pp, 0), 0xff);  /* All inputs - inverted. */
 }
 
 static void show_adc(void)
 {
-    Blink_RH   row;
+    Blink_CH   row;
 
     row = Bfp->new_row("ADC");
     Bfp->add_register("mV", ADC_input_neg_handle, 13, RO_STYLE_DECIMAL, row);
@@ -595,7 +602,7 @@ static void show_adc(void)
     Bfp->add_register("Channel +", ADC_channel_pos_handle, 4,
                       RO_STYLE_SPIN, row);
     Bfp->add_register("SoR", ADC_SOR_handle, 1, RO_ALT_COLOURS, row);
-    Bfp->close_row(row);
+    Bfp->add_to_container(row, NULL);
 }
 
 /* Set-up the Blink panel library in run_avr, and run the simulator.
@@ -607,7 +614,7 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
 {
     void        *handle;
     struct port *pp;
-    Blink_RH     row;
+    Blink_CH     row;
     int          state, len, i;
     char         port_letter, vcd_letter;
     char        *fwcp;
@@ -641,7 +648,7 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
     free(fwcp);
     if (len > 4 && wn[len - 4] == '.')
         wn[len - 4] = '\0';
-    if (!Bfp->init(wn, (struct simulator_calls *)&blink_callbacks))
+    if (!Bfp->init(wn, (struct simulator_calls *)&blink_callbacks, NULL, 0))
         return 0;
 
     /* Display simulated PC and cycle count. */
@@ -651,7 +658,7 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
                       RO_INSENSITIVE | RO_STYLE_DECIMAL, row);
     Bfp->add_register("PC", PC_handle, 20,
                       RO_INSENSITIVE | RO_STYLE_HEX, row);
-    Bfp->close_row(row);
+    Bfp->add_to_container(row, NULL);
 
     /* Check for VCD output. */
 
@@ -789,8 +796,7 @@ int Run_with_panel(avr_t *avr, elf_firmware_t *fwp, const char *firmware,
             if (tv.tv_usec - last_tv.tv_usec > 100000 ||
                 tv.tv_sec > last_tv.tv_sec) {
                 last_tv = tv;
-                Bfp->new_value(PC_handle, avr->pc);         // Update PC ...
-                Bfp->new_value(Cycles_handle, avr->cycle);  // and cycle count.
+                update_core(avr);
             }
         }
     } while (state < cpu_Done);
