@@ -18,7 +18,7 @@
 
 SHELL 			:= ${shell which bash}
 SIMAVR_VERSION	:= ${shell \
-	git describe --abbrev=0 --tags || \
+	git describe --abbrev=0 --tags 2> /dev/null || \
 	echo "unknown" }
 SIMAVR_REVISION	= 2
 
@@ -48,7 +48,7 @@ endif
 endif
 
 cores	:= ${wildcard cores/*.c}
-sim	:= ${wildcard sim/sim_*.c} ${wildcard sim/avr_*.c}
+sim	:= ${wildcard sim/sim_*.c} ${wildcard sim/avr_*.c} ${wildcard sim/xt_*.c}
 sim_o 	:= ${patsubst sim/%.c, ${OBJ}/%.o, ${sim}}
 
 VPATH	= cores

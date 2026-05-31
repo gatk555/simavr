@@ -184,7 +184,10 @@ ifneq ($(E),)
 	@echo AVR-CC ${<}
 endif
 	${AVR}gcc -Wall -gdwarf-2 -Os -std=gnu99 \
-			-mmcu=${shell v=${<} && echo $${v/_*}} \
+			-mmcu=${shell v=${<} && v=$${v/_*} && \
+			        v=$${v/avr64*/avrxmega2} && \
+			        v=$${v/avr128*/avrxmega4} && \
+			        echo $${v/avr*/avrxmega3}} \
 			-DF_CPU=8000000 \
 			-fno-inline-small-functions \
 			-ffunction-sections -fdata-sections \
