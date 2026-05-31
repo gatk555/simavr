@@ -39,10 +39,11 @@ typedef uint16_t	avr_io_addr_t;
  * gcc is happy passing these as register value, so you don't need to
  * use a pointer when passing them along to functions.
  *
- * 9 bits ought to be enough, as it's the maximum I've seen (atmega2560)
+ * "9 bits ought to be enough, as it's the maximum I've seen (atmega2560)"
+ * But not enough for XT devices, starting with ATmega4808!
  */
 typedef struct avr_regbit_t {
-	uint32_t reg : 9, bit : 3, mask : 8;
+	uint32_t reg : 15, bit : 3, mask : 8;
 } avr_regbit_t;
 
 #define REGBIT_EQUAL(a, b) \

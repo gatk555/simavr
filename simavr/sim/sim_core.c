@@ -1142,9 +1142,9 @@ avr_flashaddr_t avr_run_one(avr_t * avr)
 						new_pc = avr->pc;
 					}
 
-					uint32_t z = avr->data[R_ZL] | (avr->data[R_ZH] << 8);
+					uint32_t z = avr->base[R_ZL] | (avr->base[R_ZH] << 8);
 					if (e)
-						z |= avr->data[avr->eind] << 16;
+						z |= avr->base[avr->eind] << 16;
 					STATE("%si%s Z[%04x]\n", e?"e":"", p?"call":"jmp", z << 1);
 					if (p)
 						cycle += _avr_push_addr(avr, new_pc) - 1;
@@ -1180,8 +1180,8 @@ SREG();
 					}
 
 					uint32_t z;
-					z = avr->data[R_ZL] | (avr->data[R_ZH] << 8) |
-						(avr->data[avr->rampz] << 16);
+					z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) |
+						(avr->base[avr->rampz] << 16);
 					STATE("elpm %s, (Z[%02x:%04x] \t%s)\n",
 					      AVR_REGNAME(0), z >> 16,
 					      z & 0xffff, FAS(z));
@@ -1225,8 +1225,8 @@ SREG();
 							}
 
 							uint32_t z;
-							z = avr->data[R_ZL] | (avr->data[R_ZH] << 8) |
-								(avr->data[avr->rampz] << 16);
+							z = avr->base[R_ZL] | (avr->base[R_ZH] << 8) |
+								(avr->base[avr->rampz] << 16);
 							get_d5(opcode);
 							int op = opcode & 1;
 							STATE("elpm %s, (Z[%02x:%04x]%s)\t\t%s\n",
