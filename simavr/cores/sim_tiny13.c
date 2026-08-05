@@ -65,6 +65,12 @@ static const struct mcu_t {
 		.signature = { SIGNATURE_0,SIGNATURE_1,SIGNATURE_2 },
 		.fuse = { LFUSE_DEFAULT, HFUSE_DEFAULT },
 #endif
+		.reset_flags = {
+			.porf = AVR_IO_REGBIT(MCU_STATUS_REG, PORF),
+			.extrf = AVR_IO_REGBIT(MCU_STATUS_REG, EXTRF),
+			.borf = AVR_IO_REGBIT(MCU_STATUS_REG, BORF),
+			.wdrf = AVR_IO_REGBIT(MCU_STATUS_REG, WDRF)
+		},
 		.init = init,
 		.reset = reset,
 	},

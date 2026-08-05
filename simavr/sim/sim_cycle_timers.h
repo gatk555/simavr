@@ -39,6 +39,13 @@ extern "C" {
 
 #define MAX_CYCLE_TIMERS	64
 
+/* The signature of a timed callback function.  The return value is the time
+ * of the next call, or zero to quit.  If the return value is TIMER_RESET,
+ * a reset is done and the current run of timer processing stops.
+ */
+
+#define TIMER_RESET UINT64_MAX
+
 typedef avr_cycle_count_t (*avr_cycle_timer_t)(
 		struct avr_t * avr,
 		avr_cycle_count_t when,

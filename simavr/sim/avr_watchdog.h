@@ -33,7 +33,6 @@ typedef struct avr_watchdog_t {
 	avr_io_t	io;
 
 	avr_regbit_t 	wdrf;		// watchdog reset flag (in MCU Status Register)
-
 	avr_regbit_t 	wdce;		// watchdog change enable
 	avr_regbit_t 	wde;		// watchdog enabled
 	avr_regbit_t 	wdp[4];		// watchdog Timer Prescaler
@@ -41,11 +40,6 @@ typedef struct avr_watchdog_t {
 	avr_int_vector_t watchdog;	// watchdog interrupt
 
 	avr_cycle_count_t	cycle_count;
-
-	struct {
-		uint8_t		wdrf;		// saved watchdog reset flag
-		avr_run_t	avr_run;	// restored during reset
-	} reset_context;
 } avr_watchdog_t;
 
 /* takes no parameter */

@@ -55,30 +55,50 @@ ISR(WDT_vect)
 int main()
 {
 	stdout = &mystdout;
-	DDRD = (1<<PD1); // configure TxD as output
 	
+	if (MCUSR & (1 << WDRF)) {
+		// Restart after watchdog reset.
+
+		if (MCUSR & (1 << PORF)) {
+			printf("Watchdog reset MCU.\n");
+			MCUSR &= ~(1 << PORF);	// Clear Power-on reset flag.
+			sei();					// Prevent exit.
+			sleep_cpu();			// Get kicked again.
+		} else {
+			printf("Watchdog reset MCU again.\n");
+			cli();
+			sleep_cpu();    // Done.
+		}
+	}
+
 	wdt_enable(WDTO_120MS);
 
 	// enable watchdog interupt
 	// NOTE: since the Change Enable bit is no longer on, it should not
 	// change the timer value that is already set!
-	WDTCSR = (1 << WDIE);
 
+	WDTCSR = (1 << WDIE);
 	sei();
 
-	printf("Watchdog is active\n");
+	printf("Watchdog is active.\n");
 	uint8_t count = 20;
 	while (count--) {
 		_delay_ms(10);
 		wdt_reset();
 	}
-	printf("Waiting for Watchdog to kick\n");
-	// now , stop calling the watchdog reset, and just sleep until it fires
-	sleep_cpu();
-	printf("Watchdog kicked us!\n");
 
-	// when arriving here, the watchdog timer interupt was called and woke up
-	// the core from sleep, so we can just quit properly
+	// Now stop calling the watchdog reset, and just sleep until it fires.
+
+	printf("Waiting for Watchdog to kick.\n");
+	sleep_cpu();
+
+	// When arriving here, the watchdog timer interupt was called and woke up
+	// the core from sleep. Sleep again and watchdog should reset.
+
+	printf("Watchdog kicked us!\n");
+	sleep_cpu();
+
+	printf("Impossible: watchdog kicked again!\n");
 	cli();
 	sleep_cpu();
 }

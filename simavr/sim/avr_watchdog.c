@@ -24,11 +24,6 @@
 #include <stdlib.h>
 #include "avr_watchdog.h"
 
-static void avr_watchdog_run_callback_software_reset(avr_t * avr)
-{
-	avr_reset(avr);
-}
-
 static avr_cycle_count_t avr_watchdog_timer(
 		struct avr_t * avr, avr_cycle_count_t when, void * param)
 {
@@ -41,17 +36,13 @@ static avr_cycle_count_t avr_watchdog_timer(
 	} else if (avr_regbit_get(avr, p->wde)) {
 		AVR_LOG(avr, LOG_TRACE,
 				"WATCHDOG: timer fired without interrupt. Resetting\n");
-
-		p->reset_context.avr_run = avr->run;
-		p->reset_context.wdrf = 1;
+		avr_regbit_set(avr, p->wdrf);
 
 		/* Ideally we would perform a reset here via 'avr_reset'
-		 * However, returning after reset would result in an unconsistent state.
-		 * It seems our best (and cleanest) solution is to set a temporary call 
-		 * back which can safely perform the reset for us...  During reset,
-		 * the previous callback can be restored and safely resume.
+		 * but timer state would be inconsistent on return.
+		 * This magic value tells the timer code to reset.
 		 */
-		avr->run = avr_watchdog_run_callback_software_reset;
+		return TIMER_RESET;
 	}
 
 	return 0;
@@ -192,16 +183,13 @@ static void avr_watchdog_reset(avr_io_t * port)
 	avr_watchdog_t * p = (avr_watchdog_t *)port;
 	avr_t * avr = p->io.avr;
 
-	if (p->reset_context.wdrf) {
-		p->reset_context.wdrf = 0;
+	if (avr_regbit_get(avr, p->wdrf)) {
 		/*
 		 * if watchdog reset kicked, then watchdog gets restarted at
 		 * fastest interval
 		 */
-		avr->run = p->reset_context.avr_run;
 
 		avr_regbit_set(avr, p->wde);
-		avr_regbit_set(avr, p->wdrf);
 		avr_regbit_set_array_from_value(avr, p->wdp, 4, 0);
 		
 		avr_watchdog_set_cycle_count_and_timer(avr, p, 0, 0);
@@ -225,7 +213,4 @@ void avr_watchdog_init(avr_t * avr, avr_watchdog_t * p)
 	avr_register_vector(avr, &p->watchdog);
 
 	avr_register_io_write(avr, p->wdce.reg, avr_watchdog_write, p);
-
-	p->reset_context.wdrf = 0;
 }
-

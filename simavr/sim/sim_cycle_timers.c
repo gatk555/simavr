@@ -230,6 +230,13 @@ avr_cycle_timer_process(
 		t->next = NULL;
 		do {
 			avr_cycle_count_t w = t->timer(avr, when, t->param);
+			// Magic value to trigger a reset, used by watchdog and (one day)
+			// brown-out code.
+
+			if (w == TIMER_RESET) {
+				avr_reset(avr);
+				return 0;
+			}
 			// make sure the return value is either zero, or greater
 			// than the last one to prevent infinite loop here
 			when = w > when ? w : 0;
