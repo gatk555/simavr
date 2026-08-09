@@ -168,12 +168,7 @@ const struct mcu_t SIM_CORENAME = {
 		.name = '0',
 #ifdef OC0_PORT
 		.wgm = { AVR_IO_REGBIT(TCCR0, WGM00), AVR_IO_REGBIT(TCCR0, WGM01)},
-		.wgm_op = {
-			[0] = AVR_TIMER_WGM_NORMAL8(),
-			// TODO: 1 PWM phase correct 8bit
-			[2] = AVR_TIMER_WGM_CTC(),
-			[3] = AVR_TIMER_WGM_FASTPWM8(),
-		},
+		WGM_OPS_4,
 #else
 		.wgm_op = {
 			[0] = AVR_TIMER_WGM_NORMAL8(),
@@ -266,12 +261,7 @@ const struct mcu_t SIM_CORENAME = {
 	.timer2 = {
 		.name = '2',
 		.wgm = { AVR_IO_REGBIT(TCCR2, WGM20), AVR_IO_REGBIT(TCCR2, WGM21) },
-		.wgm_op = {
-			[0] = AVR_TIMER_WGM_NORMAL8(),
-			// TODO 1 pwm phase correct 
-			[2] = AVR_TIMER_WGM_CTC(),
-			[3] = AVR_TIMER_WGM_FASTPWM8(),
-		},
+		WGM_OPS_4,
 		.cs = { AVR_IO_REGBIT(TCCR2, CS20), AVR_IO_REGBIT(TCCR2, CS21), AVR_IO_REGBIT(TCCR2, CS22) },
 		.cs_div = { 0, 0, 3 /* 8 */, 4 /* 32 */, 6 /* 64 */, 7 /* 128 */, 8 /* 256 */, 10 /* 1024 */ /* TODO external clock */ },
 

@@ -171,7 +171,7 @@ const struct mcu_t {
 		.wgm = { AVR_IO_REGBIT(TCCR0, WGM00), AVR_IO_REGBIT(TCCR0, WGM01) },
 		.wgm_op = {
 			[0] = AVR_TIMER_WGM_NORMAL8(),
-			// PHASE CORRECT 
+			[1] = AVR_TIMER_WGM_FCPWM8(),
 			[2] = AVR_TIMER_WGM_CTC(),
 			[3] = AVR_TIMER_WGM_FASTPWM8(),
 		},
@@ -271,7 +271,7 @@ const struct mcu_t {
 		.wgm = { AVR_IO_REGBIT(TCCR2, WGM20), AVR_IO_REGBIT(TCCR2, WGM21) },
 		.wgm_op = {
 			[0] = AVR_TIMER_WGM_NORMAL8(),
-			// TODO 1 pwm phase correct 
+			[1] = AVR_TIMER_WGM_FCPWM8(),
 			[2] = AVR_TIMER_WGM_CTC(),
 			[3] = AVR_TIMER_WGM_FASTPWM8(),
 		},

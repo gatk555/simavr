@@ -209,12 +209,7 @@ const struct mcu_t SIM_CORENAME = {
 		.name = '0',
 		.disabled = AVR_IO_REGBIT(PRR,PRTIM0),
 		.wgm = { AVR_IO_REGBIT(TCCR0A, WGM00), AVR_IO_REGBIT(TCCR0A, WGM01), AVR_IO_REGBIT(TCCR0B, WGM02) },
-		.wgm_op = {
-			[0] = AVR_TIMER_WGM_NORMAL8(),
-			[2] = AVR_TIMER_WGM_CTC(),
-			[3] = AVR_TIMER_WGM_FASTPWM8(),
-			[7] = AVR_TIMER_WGM_OCPWM(),
-		},
+		WGM_OPS_8,
 		.cs = { AVR_IO_REGBIT(TCCR0B, CS00), AVR_IO_REGBIT(TCCR0B, CS01), AVR_IO_REGBIT(TCCR0B, CS02) },
 		.cs_div = { 0, 0, 3 /* 8 */, 6 /* 64 */, 8 /* 256 */, 10 /* 1024 */, AVR_TIMER_EXTCLK_CHOOSE, AVR_TIMER_EXTCLK_CHOOSE },
 		.ext_clock_pin = AVR_IO_REGBIT(PORTC, 2), /* External clock pin */

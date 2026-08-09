@@ -128,6 +128,26 @@ typedef struct avr_timer_wgm_t {
 		[15] = AVR_TIMER_WGM_OCFASTPWM(),\
 	    }
 
+/* Similar for 8-bit timers. */
+
+#define WGM_OPS_4 \
+	.wgm_op = { \
+		[0] = AVR_TIMER_WGM_NORMAL8(),	\
+		[1] = AVR_TIMER_WGM_FCPWM8(),	\
+		[2] = AVR_TIMER_WGM_CTC(),		\
+		[3] = AVR_TIMER_WGM_FASTPWM8(),	\
+	}
+
+#define WGM_OPS_8 \
+	.wgm_op = { \
+		[0] = AVR_TIMER_WGM_NORMAL8(),	\
+		[1] = AVR_TIMER_WGM_FCPWM8(),	\
+		[2] = AVR_TIMER_WGM_CTC(),		\
+		[3] = AVR_TIMER_WGM_FASTPWM8(),	\
+		[5] = AVR_TIMER_WGM_OCPWM(),	\
+		[7] = AVR_TIMER_WGM_OCFASTPWM(),\
+	}
+
 typedef struct avr_timer_comp_t {
 		avr_int_vector_t	interrupt;		// interrupt vector
 		struct avr_timer_t	*timer;			// parent timer

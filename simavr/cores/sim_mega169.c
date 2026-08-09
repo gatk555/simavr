@@ -191,12 +191,7 @@ const struct mcu_t {
 	.timer0 = {
 		.name = '0',
 		.wgm = { AVR_IO_REGBIT(TCCR0A, WGM00), AVR_IO_REGBIT(TCCR0A, WGM01) },
-		.wgm_op = {
-			[0] = AVR_TIMER_WGM_NORMAL8(),
-			[2] = AVR_TIMER_WGM_CTC(),
-			[3] = AVR_TIMER_WGM_FASTPWM8(),
-			[7] = AVR_TIMER_WGM_OCPWM(),
-		},
+		WGM_OPS_4,
 		.cs = { AVR_IO_REGBIT(TCCR0A, CS00), AVR_IO_REGBIT(TCCR0A, CS01), AVR_IO_REGBIT(TCCR0A, CS02) },
 		.cs_div = { 0, 0, 3 /* 8 */, 6 /* 64 */, 8 /* 256 */, 10 /* 1024 */, AVR_TIMER_EXTCLK_CHOOSE, AVR_TIMER_EXTCLK_CHOOSE },
 		.ext_clock_pin = AVR_IO_REGBIT(PORTG, 4), /* External clock pin */
@@ -278,12 +273,7 @@ const struct mcu_t {
 	.timer2 = {
 		.name = '2',
 		.wgm = { AVR_IO_REGBIT(TCCR2A, WGM20), AVR_IO_REGBIT(TCCR2A, WGM21) },
-		.wgm_op = {
-			[0] = AVR_TIMER_WGM_NORMAL8(),
-			// TODO 1 pwm phase correct 
-			[2] = AVR_TIMER_WGM_CTC(),
-			[3] = AVR_TIMER_WGM_FASTPWM8(),
-		},
+		WGM_OPS_4,
 		.cs = { AVR_IO_REGBIT(TCCR2A, CS20), AVR_IO_REGBIT(TCCR2A, CS21), AVR_IO_REGBIT(TCCR2A, CS22) },
 		.cs_div = { 0, 0, 3 /* 8 */, 5 /* 32 */, 6 /* 64 */, 7 /* 128 */, 8 /* 256 */, 10 /* 1024 */ },
         .as2 = AVR_IO_REGBIT(ASSR, AS2),
