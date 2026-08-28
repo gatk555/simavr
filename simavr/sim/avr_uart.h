@@ -83,9 +83,10 @@ enum {
 	// the uart code monitors for firmware that poll on
 	// reception registers, and can do an atomic usleep()
 	// if it's detected, this helps regulating CPU
-	AVR_UART_FLAG_POOL_SLEEP = (1 << 0),
-	AVR_UART_FLAG_POLL_SLEEP = (1 << 0),		// to replace pool_sleep
-	AVR_UART_FLAG_STDIO = (1 << 1),				// print lines on the console
+	AVR_UART_FLAG_POOL_SLEEP = (1 << 0),		// Historical mispelling ...
+	AVR_UART_FLAG_POLL_SLEEP = (1 << 0),		// to replace POOL_SLEEP.
+	AVR_UART_FLAG_STDIO = (1 << 1),				// Print lines on the console
+	AVR_UART_FLAG_RAW = (1 << 2),				// ... modifier, raw output,
 };
 
 typedef struct avr_uart_t {

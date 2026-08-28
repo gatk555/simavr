@@ -250,7 +250,7 @@ avr_uart_udr_write(
 	avr_uart_t * p = (avr_uart_t *)param;
 
 	// The byte to be sent should NOT be written there,
-	// the value written could never be read back.
+	// the value written can never be read back.
 	//avr_core_watch_write(avr, addr, v);
 	if (avr->gdb) {
 		avr_gdb_handle_watchpoints(avr, addr, AVR_GDB_WATCH_WRITE);
@@ -262,15 +262,22 @@ avr_uart_udr_write(
 	}
 
 	if (p->flags & AVR_UART_FLAG_STDIO) {
-		const int maxsize = 256;
-		if (!p->stdio_out)
-			p->stdio_out = malloc(maxsize);
-		p->stdio_out[p->stdio_len++] = v < ' ' ? '.' : v;
-		p->stdio_out[p->stdio_len] = 0;
-		if (v == '\n' || p->stdio_len == maxsize) {
-			p->stdio_len = 0;
-			AVR_LOG(avr, LOG_OUTPUT,
-					"%s%s%s\n", simavr_font.green, p->stdio_out, simavr_font.normal);
+		if (p->flags & AVR_UART_FLAG_RAW) {
+			write(1, &v, 1);	// Unbuffered and uninterpreted.
+		} else {
+			const int maxsize = 256;
+
+			if (!p->stdio_out)
+				p->stdio_out = malloc(maxsize);
+			if (v == '\n' || p->stdio_len == maxsize) {
+				AVR_LOG(avr, LOG_OUTPUT, "%s%.*s%s\n",
+						simavr_font.green,
+						p->stdio_len, p->stdio_out,
+						simavr_font.normal);
+				p->stdio_len = 0;
+			} else {
+				p->stdio_out[p->stdio_len++] = v < ' ' ? '.' : v;
+			}
 		}
 	}
 	TRACE(printf("UDR%c(%02x) = %02x\n", p->name, addr, v);)
