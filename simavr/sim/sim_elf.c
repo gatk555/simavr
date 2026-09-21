@@ -28,8 +28,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <libgen.h>
 #include <string.h>
 #include <errno.h>
+
+#include "sim_elf.h"
+#include "sim_hex.h"
 
 #ifdef HAVE_LIBELF
 #include <libelf.h>
@@ -39,7 +43,6 @@
 #define ELF_SYMBOLS 0
 #endif
 
-#include "sim_elf.h"
 #include "sim_vcd_file.h"
 #include "avr_eeprom.h"
 #include "avr_ioport.h"
@@ -150,7 +153,7 @@ avr_load_firmware(
 
 	// Allocate table of Flash address strings.
 
-        table = calloc(scount, sizeof (char *));
+	table = calloc(scount, sizeof (char *));
 	avr->trace_data->codeline = table;
 	avr->trace_data->codeline_size = scount;
 
@@ -286,8 +289,8 @@ avr_load_firmware(
 		free(ochunk);
 	}
 
-#ifdef CONFIG_PULL_UPS
 	// load the default pull up/down values for ports
+
 	for (int i = 0; i < 8 && firmware->external_state[i].port; i++) {
 		avr_ioport_external_t e = {
 			.name = firmware->external_state[i].port,
@@ -296,9 +299,10 @@ avr_load_firmware(
 		};
 		avr_ioctl(avr, AVR_IOCTL_IOPORT_SET_EXTERNAL(e.name), &e);
 	}
-#endif
+
 	avr_set_command_register(avr, firmware->command_register_addr);
 	avr_set_console_register(avr, firmware->console_register_addr);
+	avr->options = firmware->options;
 
 	// rest is initialization of the VCD file
 	if (firmware->tracecount == 0)
@@ -411,8 +415,14 @@ avr_load_firmware(
 	}
 	// if the firmware has specified a command register, do NOT start the trace here
 	// the firmware probably knows best when to start/stop it
-	if (!firmware->command_register_addr)
-		avr_vcd_start(avr->vcd);
+	if (!firmware->command_register_addr) {
+		char buf[128];
+
+		snprintf(buf, sizeof buf, "Firmware: %s MCU: %s",
+				 firmware->file_name, firmware->mmcu);
+		avr_vcd_start_with_comment(avr->vcd, buf);
+	}
+	free(firmware->file_name);
 }
 
 #ifdef HAVE_LIBELF
@@ -449,7 +459,6 @@ elf_parse_mmcu_section(
 				firmware->aref =
 					src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
 				break;
-#ifdef CONFIG_PULL_UPS
 			case AVR_MMCU_TAG_PORT_EXTERNAL_PULL: {
 				for (int i = 0; i < 8; i++)
 					if (!firmware->external_state[i].port) {
@@ -466,7 +475,6 @@ elf_parse_mmcu_section(
 						break;
 					}
 			}	break;
-#endif
 			case AVR_MMCU_TAG_VCD_PORTPIN:
 			case AVR_MMCU_TAG_VCD_IRQ:
 			case AVR_MMCU_TAG_VCD_TRACE:
@@ -513,6 +521,9 @@ elf_parse_mmcu_section(
 			}	break;
 			case AVR_MMCU_TAG_SIMAVR_CONSOLE: {
 				firmware->console_register_addr = src[0] | (src[1] << 8);
+			}	break;
+			case AVR_MMCU_TAG_PORT_NO_PULL: {
+				firmware->options.no_pullups = 1;
 			}	break;
 		}
 		size -= next;
@@ -786,6 +797,11 @@ elf_read_firmware(
 	}
 	elf_end(elf);
 	close(fd);
+	if (!firmware->file_name)
+		firmware->file_name = strdup(file);
+
+	sim_default_mcu(firmware, file); // Default MCU name from filename.
+
 	return 0;
 }
 #else //  HAVE_LIBELF not defined.
@@ -796,3 +812,44 @@ elf_read_firmware(const char * file, elf_firmware_t * firmware)
 	return -1;
 }
 #endif
+
+/* Be friendly: if we do not know the right MCU to run firmware, take it
+ * from the filename as the default compilation command does (Makefile.common);
+ */
+
+void sim_default_mcu(elf_firmware_t * fp, const char * filename)
+{
+	const char *sp, *ep;
+
+	if (fp->mmcu[0])
+		return;
+	sp = basename((char *)filename);
+	ep = strchr(sp, '_');
+	if (!ep || (ep - sp) >= sizeof fp->mmcu)
+		return;
+
+	if (strncmp(sp, "attiny", 6) && strncmp(sp, "atmega", 6))
+		return;
+	strncpy(fp->mmcu, sp, (ep - sp));
+	fp->mmcu[ep - sp] = 0;
+}
+
+/* Simplied setup. */
+
+avr_t *make_avr_from_file(const char *filename)
+{
+	avr_t           *avr;
+	elf_firmware_t   fw = {};
+
+	sim_setup_firmware(filename, 0, &fw, "AVR loader");
+	if (!fw.mmcu[0]) {
+		fprintf(stderr, "Unknown MCU\n");
+		exit(1);
+	}
+	avr = avr_make_mcu_by_name(fw.mmcu);
+	if (avr) {
+		avr_init(avr);
+		avr_load_firmware(avr, &fw);
+	}
+	return avr;
+}

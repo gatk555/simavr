@@ -55,15 +55,15 @@ typedef struct avr_vcd_signal_t {
 	 * For VCD input, this is the IRQ we broadcast the values to
 	 */
 	avr_irq_t 		irq;
-	char 			alias;			// vcd one character alias
+	char 			alias[8];		// VCD alias
 	uint8_t			size;			// in bits
 	char 			name[32];		// full human name
 } avr_vcd_signal_t, *avr_vcd_signal_p;
 
 typedef struct avr_vcd_log_t {
-	uint64_t 		when;			// Cycles for output,
+	uint64_t 		when;	// Cycles for output,
 							//     nS for input.
-	uint64_t			sigindex : 8,	// index in signal table
+	uint64_t		sigindex : 8,	// index in signal table
 					floating : 1,
 					value : 32;
 } avr_vcd_log_t, *avr_vcd_log_p;
@@ -80,6 +80,7 @@ typedef struct avr_vcd_t {
 	FILE * 			output;
 	FILE * 			input;
 	struct argv_t	* input_line;
+	int             stop;           // At end of input.
 
 	int 				signal_count;
 	avr_vcd_signal_t	signal[AVR_VCD_MAX_SIGNALS];
@@ -119,6 +120,10 @@ avr_vcd_add_signal(
 int
 avr_vcd_start(
 		avr_vcd_t * vcd);
+int
+avr_vcd_start_with_comment(
+	   avr_vcd_t * vcd,
+	   const char *comment);
 // stops recording signal values into the file
 int
 avr_vcd_stop(

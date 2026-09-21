@@ -93,11 +93,11 @@ avr_vcd_input_parse_line(
 		vi++;
 	}
 	for (int i = vi; i < v->argc; i++) {
-		char * a = v->argv[i];
-		uint32_t val = 0;
-		int floating = 0;
-		char name = 0;
-		int sigindex;
+		char       * a = v->argv[i];
+		uint32_t     val = 0;
+		int          floating = 0;
+		const char * name = 0;
+		int          sigindex;
 
 		if (*a == 'b' || *a == 'B') {	// Binary string
 			a++;
@@ -109,7 +109,7 @@ avr_vcd_input_parse_line(
 					val = (val << 1) | (*a - '0');
 					floating <<= 1;
 				} else {
-					name = *a;
+					name = a;
 					break;
 				}
 				a++;
@@ -122,7 +122,7 @@ avr_vcd_input_parse_line(
 			else
 				val = *a++ - '0';
 			if (*a && *a > ' ')
-				name = *a;
+				name = a;
 		} else if (*a == 'r' || *a == 'R') {
 			val = (uint32_t)strtod(++a, NULL);
 		}
@@ -131,22 +131,22 @@ avr_vcd_input_parse_line(
 			const char *n = v->argv[i+1];
 			if (strlen(n) == 1) {
 				// we've got a name, it was not attached
-				name = *n;
+				name = n;
 				i++;	// skip that one
 			}
 		}
 		sigindex = -1;
 		if (name) {
 			for (int si = 0;
-						si < vcd->signal_count &&
-						sigindex == -1; si++) {
-				if (vcd->signal[si].alias == name)
+				 si < vcd->signal_count &&
+				 sigindex == -1; si++) {
+				if (!strcmp(vcd->signal[si].alias, name))
 					sigindex = si;
 			}
 		}
 		if (sigindex == -1) {
-			printf("Signal name '%c' value %x not found\n",
-					name? name : '?', val);
+			printf("Signal name '%s' value %x not found\n",
+					name ? name : "?", val);
 			continue;
 		}
 		avr_vcd_log_t e = {
@@ -155,7 +155,7 @@ avr_vcd_input_parse_line(
 				.floating = !!floating,
 				.value = val,
 		};
-	//	printf("%10u %d\n", e.when, e.value);
+		//printf("VCD %s %10lu %d\n", name, e.when, e.value);
 		avr_vcd_fifo_write(&vcd->log, e);
 	}
 	return res;
@@ -172,7 +172,7 @@ avr_vcd_input_read(
 	char line[1024];
 
 	while (fgets(line, sizeof(line), vcd->input)) {
-	//	printf("%s", line);
+		//printf("VCD: %s", line);
 		if (!line[0])	// technically can't happen, but make sure next line works
 			continue;
 		vcd->input_line = argv_parse(vcd->input_line, line);
@@ -225,9 +225,10 @@ again:
 
 	if (avr_vcd_fifo_isempty(&vcd->log)) {
 		AVR_LOG(vcd->avr, LOG_TRACE,
-				"%s Finished reading, ending simavr\n",
-				vcd->filename);
-		avr->state = cpu_Done;
+				"%s Finished reading%s\n",
+				vcd->filename, vcd->stop ? " , ending simavr" : "");
+		if (vcd->stop)
+			avr->state = cpu_Done;
 		return 0;
 	}
 	log = avr_vcd_fifo_read_at(&vcd->log, 0);
@@ -315,19 +316,33 @@ avr_vcd_init_input(
 		} else if (!strcmp(keyword, "$var")) {
 			const char *name = v->argv[4];
 
-			vcd->signal[vcd->signal_count].alias = v->argv[3][0];
+			if (strlen(v->argv[3]) >=
+				 sizeof vcd->signal[vcd->signal_count].alias) {
+				AVR_LOG(vcd->avr, LOG_ERROR,
+						"Ignoring signal %s as alias %s is too long\n",
+						name, v->argv[3]);
+				continue;
+			}
+
+			strcpy(vcd->signal[vcd->signal_count].alias, v->argv[3]);
+			vcd->signal[vcd->signal_count].irq.name =
+				vcd->signal[vcd->signal_count].alias;
 			vcd->signal[vcd->signal_count].size = atoi(v->argv[2]);
 			strncpy(vcd->signal[vcd->signal_count].name, name,
-						sizeof(vcd->signal[0].name));
+					sizeof(vcd->signal[0].name));
 
 			vcd->signal_count++;
+		} else if (!strcmp(keyword, "$comment") &&
+				   !strcmp(v->argv[1], "simavr") &&
+				   !strcmp(v->argv[2], "exit_at_eof")) {
+			vcd->stop = 1;
 		}
 	}
 	// reuse this one
 	vcd->input_line = v;
 
 	for (int i = 0; i < vcd->signal_count; i++) {
-		AVR_LOG(vcd->avr, LOG_TRACE, "%s %2d '%c' %s : size %d\n",
+		AVR_LOG(vcd->avr, LOG_TRACE, "%s %2d '%s' %s : size %d\n",
 				__func__, i,
 				vcd->signal[i].alias, vcd->signal[i].name,
 				vcd->signal[i].size);
@@ -393,7 +408,7 @@ _avr_vcd_get_float_signal_text(
 		*dst++ = 'z';
 	if (s->size > 1)
 		*dst++ = ' ';
-	*dst++ = s->alias;
+	*dst++ = s->alias[0];
 	*dst = 0;
 	return out;
 }
@@ -413,7 +428,7 @@ _avr_vcd_get_signal_text(
 		*dst++ = value & (1 << (i-1)) ? '1' : '0';
 	if (s->size > 1)
 		*dst++ = ' ';
-	*dst++ = s->alias;
+	*dst++ = s->alias[0];
 	*dst = 0;
 	return out;
 }
@@ -437,8 +452,8 @@ avr_vcd_flush_log(
 
 	while (!avr_vcd_fifo_isempty(&vcd->log)) {
 		avr_vcd_log_t l = avr_vcd_fifo_read(&vcd->log);
-		// 10ns base -- 100MHz should be enough
-		uint64_t base = avr_cycles_to_nsec(vcd->avr, l.when - vcd->start) / 10;
+		// 1ns base -- 1GHz should be enough
+		uint64_t base = avr_cycles_to_nsec(vcd->avr, l.when - vcd->start);
 
 		/*
 		 * if that trace was seen in this nsec already, we fudge the
@@ -539,7 +554,8 @@ avr_vcd_add_signal(
 	avr_vcd_signal_t * s = &vcd->signal[index];
 	strncpy(s->name, name, sizeof(s->name));
 	s->size = signal_bit_size;
-	s->alias = ' ' + vcd->signal_count ;
+	s->alias[0] = ' ' + vcd->signal_count;
+	s->alias[1] = 0;
 
 	/* manufacture a nice IRQ name */
 	int l = strlen(name);
@@ -559,9 +575,15 @@ avr_vcd_add_signal(
 
 /* Open the VCD output file and write header.  Does nothing for input. */
 
+int avr_vcd_start(avr_vcd_t * vcd)
+{
+	return avr_vcd_start_with_comment(vcd, NULL);
+}
+
 int
-avr_vcd_start(
-		avr_vcd_t * vcd)
+avr_vcd_start_with_comment(
+	   avr_vcd_t * vcd,
+	   const char *comment)
 {
 	time_t now;
 
@@ -583,15 +605,17 @@ avr_vcd_start(
 		return -1;
 	}
 
+    if (comment)
+		fprintf(vcd->output, "$comment %s $end\n", comment);
 	time(&now);
 	fprintf(vcd->output, "$date %s$end\n", ctime(&now));
 	fprintf(vcd->output,
 		"$version Simavr " CONFIG_SIMAVR_VERSION " $end\n");
-	fprintf(vcd->output, "$timescale 10ns $end\n");	// 10ns base, aka 100MHz
+	fprintf(vcd->output, "$timescale 1ns $end\n");	// 10ns base, aka 100MHz
 	fprintf(vcd->output, "$scope module logic $end\n");
 
 	for (int i = 0; i < vcd->signal_count; i++) {
-		fprintf(vcd->output, "$var wire %d %c %s $end\n",
+		fprintf(vcd->output, "$var wire %d %s %s $end\n",
 			vcd->signal[i].size, vcd->signal[i].alias, vcd->signal[i].name);
 	}
 

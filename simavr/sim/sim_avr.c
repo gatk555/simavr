@@ -169,8 +169,9 @@ avr_init(
 
 	// cpu is in limbo before init is finished.
 	avr->state = cpu_Limbo;
-	avr->frequency = 1000000;	// can be overridden via avr_mcu_section
 	avr->irq = avr_alloc_irq(&avr->irq_pool, 0, CORE_IRQ_COUNT, irq_names);
+	if (!avr->frequency)            // Core may set default, but ...
+		avr->frequency = 1000000;	// can be overridden via avr_mcu_section.
 	for (i = CORE_IRQ_VCC; i < CORE_IRQ_COUNT; ++i) {
 		avr->irq[i].flags |= IRQ_FLAG_FILTERED;
 		avr_irq_register_notify(avr->irq + i, avr_adc_irq_notify, avr);
@@ -324,10 +325,10 @@ _avr_io_console_write(
 		uint8_t v,
 		void * param)
 {
-	if (v == '\r' && avr->io_console_buffer.buf) {
+	if (v == '\n' && avr->io_console_buffer.buf) {
 		avr->io_console_buffer.buf[avr->io_console_buffer.len] = 0;
-		AVR_LOG(avr, LOG_OUTPUT, "O:" "%s" "" "\n",
-			avr->io_console_buffer.buf);
+		AVR_LOG(avr, LOG_OUTPUT, "%s%s%s\n",
+			simavr_font.blue, avr->io_console_buffer.buf, simavr_font.normal);
 		avr->io_console_buffer.len = 0;
 		return;
 	}

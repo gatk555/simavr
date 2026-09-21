@@ -38,12 +38,13 @@
 static void _avr_usi_clock_counter(struct avr_t * avr, avr_usi_t * p)
 {
 	uint8_t counter_val = avr->data[p->r_usisr] & 0xF;
+	uint8_t usisr = avr->data[p->r_usisr] & 0xf0;
 
 	counter_val++;
-	avr->data[p->r_usisr] &= 0xf0;
-	avr->data[p->r_usisr] |= (counter_val & 0x0f);
+	usisr |= (counter_val & 0x0f);
+	avr_core_watch_write(avr, p->r_usisr, usisr);
 
-	DBG(printf("USI ------------------- 	new value %d\n", counter_val));
+	DBG(printf("USI ------------------- 	new count value %d\n", counter_val));
 
 	if(counter_val > AVR_USI_COUNTER_MAX) {
 		if (p->r_usibr)
@@ -68,18 +69,8 @@ static void _avr_usi_set_usidr(struct avr_t * avr, avr_usi_t * p, uint8_t new_va
 
 	avr_core_watch_write(avr, p->r_usidr, new_val);
 
-	switch(avr_regbit_get(avr, p->usiwm)) {
-		case USI_WM_THREEWIRE:
-			if (!p->clock_high)
-				_avr_usi_push_high_bit(p);
-			break;
-		case USI_WM_TWOWIRE:
-		case USI_WM_TWOWIRE_HOLD:
-			// TODO: this
-			break;
-		default:
-			break;
-	}
+	if (!p->clock_high)
+		_avr_usi_push_high_bit(p);
 }
 
 static void _avr_usi_clock_usidr(struct avr_t * avr, avr_usi_t * p)
@@ -104,10 +95,13 @@ static void _avr_usi_disconnect_irqs(struct avr_t * avr, avr_usi_t * p, uint8_t 
 			break;
 		}
 		case USI_WM_TWOWIRE:
-		case USI_WM_TWOWIRE_HOLD:
-			// TODO: this
+		case USI_WM_TWOWIRE_HOLD: {
+			avr_ioport_getirq_t req_di = { .bit = p->pin_di };
+			if (avr_ioctl(avr, AVR_IOCTL_IOPORT_GETIRQ_REGBIT, &req_di) > 0) {
+				avr_unconnect_irq(&p->io.irq[USI_IRQ_DO], req_di.irq[0]);
+			}
 			break;
-
+		}
 		default:
 			break;
 	}
@@ -129,13 +123,57 @@ static void _avr_usi_connect_irqs(struct avr_t * avr, avr_usi_t * p, uint8_t new
 			break;
 		}
 		case USI_WM_TWOWIRE:
-		case USI_WM_TWOWIRE_HOLD:
-			// TODO: this
+		case USI_WM_TWOWIRE_HOLD: {
+			avr_ioport_getirq_t req_di = { .bit = p->pin_di };
+			if (avr_ioctl(avr, AVR_IOCTL_IOPORT_GETIRQ_REGBIT, &req_di) > 0) {
+				avr_connect_irq(&p->io.irq[USI_IRQ_DO], req_di.irq[0]);
+			}
 			break;
-
+		}
 		default:
 			break;
 	}
+}
+
+static void _avr_usi_set_scl_hold(struct avr_t * avr, avr_usi_t * p, bool enable)
+{
+	avr_ioport_getirq_t req_ck = { .bit = p->pin_usck };
+	if (avr_ioctl(avr, AVR_IOCTL_IOPORT_GETIRQ_REGBIT, &req_ck) > 0) {
+		if (enable)
+			req_ck.irq[0]->flags |= IRQ_FLAG_STRONG;
+		else
+			req_ck.irq[0]->flags &= ~IRQ_FLAG_STRONG;
+	}
+	if (enable)
+		p->io.irq[USI_IRQ_USCK].flags |= IRQ_FLAG_STRONG;
+	else
+		p->io.irq[USI_IRQ_USCK].flags &= ~IRQ_FLAG_STRONG;
+}
+
+static avr_cycle_count_t _avr_usi_start_det_di_dly(struct avr_t * avr,	avr_cycle_count_t when,	void * param)
+{
+	avr_usi_t * p = (avr_usi_t *)param;
+
+	if (!p->io.irq[USI_IRQ_USCK].value)
+		return 0; // SCL must be high at SDA change
+
+	DBG(printf("USI ------------------- DI start condition detected\n"));
+
+	avr_raise_interrupt(avr, &p->usi_start);
+	return 0;
+}
+
+static avr_cycle_count_t _avr_usi_stop_det_di_dly(struct avr_t * avr,	avr_cycle_count_t when,	void * param)
+{
+	avr_usi_t * p = (avr_usi_t *)param;
+
+	if (!p->io.irq[USI_IRQ_USCK].value)
+		return 0; // SCL must be high at SDA change
+
+	DBG(printf("USI ------------------- DI stop condition detected\n"));
+
+	avr_core_watch_write(avr, p->r_usisr, avr->data[p->r_usisr] | (1 << p->usipf.bit));
+	return 0;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -164,12 +202,18 @@ static void avr_usi_write_usisr(struct avr_t * avr, avr_io_addr_t addr, uint8_t 
 		DBG(printf("USI ------------------- 	clearing USISIF\n"));
 		v &= ~(1 << p->usi_start.raised.bit);
 		avr_clear_interrupt(avr, &p->usi_start);
+		if (avr_regbit_get(avr, p->usi_start.raised)) {
+			_avr_usi_set_scl_hold(avr, p, false);
+		}
 	}
 
 	if (v & (1 << p->usi_ovf.raised.bit)) {
 		DBG(printf("USI ------------------- 	clearing USIOIF\n"));
 		v &= ~(1 << p->usi_ovf.raised.bit);
 		avr_clear_interrupt(avr, &p->usi_ovf);
+		if (avr_regbit_get(avr, p->usi_ovf.raised)) {
+			_avr_usi_set_scl_hold(avr, p, false);
+		}
 	}
 
 	if (v & (1 << p->usipf.bit)) {
@@ -307,23 +351,38 @@ static void avr_usi_write_usidr(struct avr_t * avr, avr_io_addr_t addr, uint8_t 
 static void _avr_usi_di_changed(struct avr_irq_t * irq, uint32_t value, void * param)
 {
 	avr_usi_t * p = (avr_usi_t *)param;
+	avr_t     * avr = p->io.avr;
+	int         up, down;
 
 	DBG(printf("USI ------------------- DI changed to %d at cycle %llu\n",
 		value,
-		p->io.avr->cycle));
+		avr->cycle));
 	p->in_bit0 = value;
+
+	if (avr_regbit_get(avr, p->usiwm) >= USI_WM_TWOWIRE) {
+		//Start & Stop detection for two wire mode
+
+		value &= 0xff;	// Ignore output flag
+		up = !(irq->value & 0xff) && value;
+		down = (irq->value & 0xff) && !value;
+		
+		if (down)
+			avr_cycle_timer_register(avr, 1UL, _avr_usi_start_det_di_dly, p);
+		else if (up)
+			avr_cycle_timer_register(avr, 1UL, _avr_usi_stop_det_di_dly, p);
+	}
 }
 
 static void _avr_usi_usck_changed(struct avr_irq_t * irq, uint32_t value, void * param)
 {
 	avr_usi_t * p = (avr_usi_t *)param;
 	avr_t     * avr = p->io.avr;
-    int         up, down;
+	int         up, down;
 	uint8_t     wm, cs;
 
 	cs = avr_regbit_get(avr, p->usics);
 	if (cs < USI_CS_EXT_POS)
-		return;					// Clocked elsewhere.
+		return;	// Clocked elsewhere.
 
 	wm = avr_regbit_get(avr, p->usiwm);
 
@@ -340,8 +399,13 @@ static void _avr_usi_usck_changed(struct avr_irq_t * irq, uint32_t value, void *
 		up ? "rising" : down ? "falling" : "?",
 		avr->cycle));
 
-	if(wm == USI_WM_TWOWIRE || wm == USI_WM_TWOWIRE_HOLD) {
-		// TODO: tell the TWI CCU that something happened
+	if (wm >= USI_WM_TWOWIRE) {
+		/* Clock Stretching after Start Condition: Hold SCL low after
+		 *  master pulls it low (till interrupt flag is cleared)
+		 */
+		if (down && avr_regbit_get(avr, p->usi_start.raised)) {
+			_avr_usi_set_scl_hold(avr, p, true);
+		}
 	}
 
 	/* External input clocks the counter on both edges.  Clock USIDR first,
@@ -358,6 +422,15 @@ static void _avr_usi_usck_changed(struct avr_irq_t * irq, uint32_t value, void *
 			_avr_usi_push_high_bit(p);
 		}
 		_avr_usi_clock_counter(avr, p);
+	}
+
+	if (wm == USI_WM_TWOWIRE_HOLD) {
+		/* Clock Stretching after Overflow (start of ACK): Hold SCL low
+		 *  after master pulls it low (till interrupt flag is cleared)
+		 */
+		if (down && avr_regbit_get(avr, p->usi_ovf.raised)) {
+			_avr_usi_set_scl_hold(avr, p, true);
+		}
 	}
 }
 

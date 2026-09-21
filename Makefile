@@ -7,7 +7,7 @@
 # For package building, you will need to pass RELEASE=1 to make
 RELEASE	?= 0
 
-DESTDIR = /usr/local
+DESTDIR ?= /usr/local
 PREFIX = ${DESTDIR}
 
 .PHONY: doc
@@ -31,12 +31,21 @@ run_tests: build-simavr build-tests
 
 install: install-simavr install-parts
 
+install-all: install install-examples install-tests
+
 install-simavr:
 	$(MAKE) -C simavr install RELEASE=$(RELEASE) DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 
 install-parts:
 	$(MAKE) -C examples/parts install RELEASE=$(RELEASE) DESTDIR=$(DESTDIR) PREFIX=$(PREFIX)
 
+install-examples:
+	mkdir -p $(DESTDIR)/examples
+	for i in examples/board_* ; do install -m644 $$i/*.axf $$i/*.elf $$i/*hex $$i/obj*/*.elf $(DESTDIR)/examples 2>/dev/null || true ; done
+
+install-tests:
+	mkdir -p $(DESTDIR)/tests
+	cd tests ; install -m644 obj*/*.tst *.axf *.hex *.in $(DESTDIR)/tests
 
 # Find whether libelf and libdwarf are available.
 
@@ -58,6 +67,7 @@ Libs.mk:
 	  fi \
 	fi
 	@rm -f testit.c
+
 
 doc:
 	$(MAKE) -C doc RELEASE=$(RELEASE)

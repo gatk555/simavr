@@ -89,9 +89,10 @@ avr_timer_comp(
 	}
 
 	// check output compare mode and set/clear pins
+
 	uint8_t     mode = avr_regbit_get(avr, cp->com);
 	avr_irq_t * irq = &p->io.irq[TIMER_IRQ_OUT_COMP + comp];
-    int         have_pin = (cp->pin_irq != NULL);	// Physical pin
+	int         have_pin = (cp->pin_irq != NULL);	// Physical pin
 	uint32_t    flags;
 
 	AVR_LOG(avr, LOG_TRACE, "Timer comp: irq %p, mode %d @%d\n", irq, mode, when);

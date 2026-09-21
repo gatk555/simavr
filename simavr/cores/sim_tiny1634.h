@@ -40,6 +40,7 @@
 #include "avr_ioport.h"
 #include "avr_timer.h"
 #include "avr_adc.h"
+#include "avr_uart.h"
 
 void tn1634_init(struct avr_t * avr);
 void tn1634_reset(struct avr_t * avr);
@@ -57,6 +58,7 @@ struct mcu_t {
 	avr_ioport_t porta, portb, portc;
 	avr_timer_t timer0, timer1;
 	avr_adc_t adc;
+    avr_uart_t uart0, uart1;
 };
 
 #ifdef SIM_CORENAME
@@ -187,23 +189,7 @@ const struct mcu_t SIM_CORENAME = {
 		.disabled = AVR_IO_REGBIT(PRR, PRTIM1),
 		.wgm = { AVR_IO_REGBIT(TCCR1A, WGM10), AVR_IO_REGBIT(TCCR1A, WGM11),
 				 AVR_IO_REGBIT(TCCR1B, WGM12), AVR_IO_REGBIT(TCCR1B, WGM13) },
-		.wgm_op = {
-			[0]  = AVR_TIMER_WGM_NORMAL16(),
-			[1]  = AVR_TIMER_WGM_FCPWM8(),
-			[2]  = AVR_TIMER_WGM_FCPWM9(),
-			[3]  = AVR_TIMER_WGM_FCPWM10(),
-			[4]  = AVR_TIMER_WGM_CTC(),
-			[5]  = AVR_TIMER_WGM_FASTPWM8(),
-			[6]  = AVR_TIMER_WGM_FASTPWM9(),
-			[7]  = AVR_TIMER_WGM_FASTPWM10(),
-			[8]  = AVR_TIMER_WGM_ICPWM(),
-			[9]  = AVR_TIMER_WGM_OCPWM(),
-			[10] = AVR_TIMER_WGM_ICPWM(),
-			[11] = AVR_TIMER_WGM_OCPWM(),
-			[12] = AVR_TIMER_WGM_ICCTC(),
-			[14] = AVR_TIMER_WGM_ICFASTPWM(),
-			[15] = { .kind = avr_timer_wgm_fast_pwm, .top = avr_timer_wgm_reg_ocra },
-		},
+		WGM_OPS_16,
 		.cs = { AVR_IO_REGBIT(TCCR1B, CS10), AVR_IO_REGBIT(TCCR1B, CS11),
 				AVR_IO_REGBIT(TCCR1B, CS12) },
 		.cs_div = { 0, 0, 3 /* 8 */, 6 /* 64 */, 8 /* 256 */, 10 /* 1024 */,
@@ -261,7 +247,8 @@ const struct mcu_t SIM_CORENAME = {
 		.ref = { AVR_IO_REGBIT(ADMUX, REFS0), AVR_IO_REGBIT(ADMUX, REFS1) },
 		.ref_values = {
 			[0] = ADC_VREF_VCC,
-			[1] = ADC_VREF_V110,
+			[1] = ADC_VREF_AREF,
+			[2] = ADC_VREF_V110,
 		},
 
 		.adlar = AVR_IO_REGBIT(ADCSRB, ADLAR),
@@ -306,6 +293,8 @@ const struct mcu_t SIM_CORENAME = {
 			.vector = ADC_vect,
 		},
 	},
+	AVR_UARTX_DECLARE(0, PRR, PRUSART0),
+	AVR_UARTX_DECLARE(1, PRR, PRUSART1),
 };
 
 #endif /* SIM_CORENAME */

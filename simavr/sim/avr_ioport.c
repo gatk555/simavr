@@ -39,6 +39,22 @@ avr_ioport_flag_write(
 		avr_clear_interrupt(avr, &p->pcint);
 }
 
+static int
+avr_ioport_flag_bit_write(
+		struct avr_t  * avr,
+		uint8_t			bit,
+		uint8_t			v,
+		void		  * param)
+{
+	avr_ioport_t * p = (avr_ioport_t *)param;
+
+	// Clear interrupt if 1 is written to flag.
+
+	if (v)
+		avr_clear_interrupt(avr, &p->pcint);
+	return 1;
+}
+
 static uint8_t
 avr_ioport_read(
 		struct avr_t * avr,
@@ -72,19 +88,25 @@ avr_ioport_update_pin_irqs(
 	// internal pullup, set that.
 
 	for (int i = 0; i < 8; i++) {
-		if (ddr & (1 << i))
+		if (ddr & (1 << i)) {
 			val = (avr->data[p->r_port] >> i) & 1;
-#ifdef CONFIG_PULL_UPS
-		else if (p->external.pull_mask & (1 << i))
-			val = (p->external.pull_value >> i) & 1;
-		else if ((avr->data[p->r_port] >> i) & 1)
-			val = 1;
-#endif
-		else
+		} else if (avr->options.no_pullups) {
 			continue;
-	prev = (p->io.irq[i].value & 0xff) != 0;
-	if (val != prev)
-		avr_raise_irq(p->io.irq + i, val);
+		} else {
+			/* Check for pull-ups. */
+
+			if (p->external.pull_mask & (1 << i)) {
+				val = (p->external.pull_value >> i) & 1;
+			} else if (((avr->data[p->r_port] >> i) & 1) &&
+					   (!p->pud.reg || avr_regbit_get(avr, p->pud) == 0)) {
+				val = 1;
+			} else {
+				continue;
+			}
+		}
+		prev = (p->io.irq[i].value & 0xff) != 0;
+		if (val != prev)
+			avr_raise_irq(p->io.irq + i, val);
 	}
 }
 
@@ -96,10 +118,11 @@ avr_ioport_update_port_irqs(
 	uint8_t ddr = avr->data[p->r_ddr];
 	uint8_t pin = (avr->data[p->r_pin] & ~ddr) | (avr->data[p->r_port] & ddr);
 
-#ifdef CONFIG_PULL_UPS
-	pin |= avr->data[p->r_port] & ~ddr;
-	pin = (pin & ~p->external.pull_mask) | p->external.pull_value;
-#endif
+	if (!avr->options.no_pullups) {
+		pin |= avr->data[p->r_port] & ~ddr;
+		pin = (pin & ~p->external.pull_mask) | p->external.pull_value;
+	}
+
 	avr_raise_irq(p->io.irq + IOPORT_IRQ_PIN_ALL, pin);
 
 	// if IRQs are registered on the PORT register (for example, VCD dumps) send
@@ -136,9 +159,11 @@ avr_ioport_write(
 }
 
 /*
- * This is a reasonably new behaviour for the io-ports. Writing 1's to the PIN register
- * toggles the PORT equivalent bit (regardless of direction
+ * This is a reasonably new behaviour for the io-ports.
+ * Writing 1's to the PIN register toggles the PORT equivalent bit
+ * (regardless of direction).  Single bit writes need special treatment.
  */
+
 static void
 avr_ioport_pin_write(
 		struct avr_t * avr,
@@ -149,6 +174,20 @@ avr_ioport_pin_write(
 	avr_ioport_t * p = (avr_ioport_t *)param;
 
 	avr_ioport_write(avr, p->r_port, avr->data[p->r_port] ^ v, param);
+}
+
+static int
+avr_ioport_pin_bit_write(struct avr_t *avr,
+						 uint8_t       bit,
+						 uint8_t	   v,
+						 void         *param)
+{
+	avr_ioport_t * p = (avr_ioport_t *)param;
+
+	if (v)
+		avr_ioport_write(avr, p->r_port,
+						 avr->data[p->r_port] ^ (1 << bit), param);
+	return 1; // Done it.
 }
 
 /*
@@ -183,16 +222,21 @@ avr_ioport_irq_notify(
 		void * param)
 {
 	avr_ioport_t * p = (avr_ioport_t *)param;
-	avr_t * avr = p->io.avr;
-	int output = value & AVR_IOPORT_OUTPUT;
-	uint8_t mask = irq->irq == IOPORT_IRQ_PIN_ALL_IN ? 0xff : (1 << irq->irq);
-	uint8_t ddr = avr->data[p->r_ddr];
-	uint8_t new_pin;
+	avr_t        * avr = p->io.avr;
+	int            output = value & AVR_IOPORT_OUTPUT;
+	uint8_t        ddr = avr->data[p->r_ddr];
+	uint8_t        mask, new_pin, old_value;
 
+	if (irq->irq == IOPORT_IRQ_PIN_ALL_IN)
+		mask = 0xff;
+	else
+		mask = (1 << irq->irq);
 	value &= 0xff;
 	if (value && irq->irq != IOPORT_IRQ_PIN_ALL_IN)
 		value = mask;
 	new_pin = (avr->data[p->r_pin] & ~mask) | (value & mask);
+	new_pin = (avr->data[p->r_port] & ddr) | (new_pin & ~ddr);
+	old_value = irq->value;
 
 	if (output) {
 		uint8_t new_out;
@@ -216,13 +260,13 @@ avr_ioport_irq_notify(
 			 */
 
 			avr->data[p->r_port] = new_out;
-			return;	   // TODO: stop further processing of IRQ.
+			irq->flags |= IRQ_FLAG_NTF_STOP; // Stop further processing of IRQ.
+			return;
 		}
 	} else {
 		// Set the real PIN bit.
 
 		if (irq->irq == IOPORT_IRQ_PIN_ALL_IN) {
-			new_pin = (avr->data[p->r_port] & ddr) | (new_pin & ~ddr);
 			p->irqing = 1;
 			for (int i = 0; i < 8; ++i)
 				avr_raise_irq(p->io.irq + i, (new_pin >> i) & 1);
@@ -243,7 +287,7 @@ avr_ioport_irq_notify(
 		// Ignore lingering copy of AVR_IOPORT_OUTPUT, or
 		// differing non-zero values.
 
-		if (!value == !(irq->value & 0xff))
+		if (!value == !(old_value & 0xff))
 			return;
 
 		// if the pcint bit is on, try to raise it
@@ -326,17 +370,17 @@ avr_ioport_ioctl(
 					*((avr_ioport_state_t*)io_param) = state;
 				res = 0;
 			}
-#ifdef CONFIG_PULL_UPS
+
 			/*
 			 * Set the default IRQ values when pin is set as input
 			 */
-			if (ctl == AVR_IOCTL_IOPORT_SET_EXTERNAL(p->name)) {
+			if (ctl == AVR_IOCTL_IOPORT_SET_EXTERNAL(p->name) &&
+				!avr->options.no_pullups) {
 				avr_ioport_external_t * m = (avr_ioport_external_t*)io_param;
 				p->external.pull_mask = m->mask;
 				p->external.pull_value = m->value;
 				res = 0;
 			}
-#endif
 		}
 	}
 
@@ -373,11 +417,6 @@ void avr_ioport_init(avr_t * avr, avr_ioport_t * p)
 		return;
 	}
 	p->io = _io;
-//	printf("%s PIN%c 0x%02x DDR%c 0x%02x PORT%c 0x%02x\n", __FUNCTION__,
-//		p->name, p->r_pin,
-//		p->name, p->r_ddr,
-//		p->name, p->r_port);
-
 	avr_register_io(avr, &p->io);
 	avr_register_vector(avr, &p->pcint);
 	// allocate this module's IRQ
@@ -391,9 +430,16 @@ void avr_ioport_init(avr_t * avr, avr_ioport_t * p)
 	avr_register_io_write(avr, p->r_port, avr_ioport_write, p);
 	avr_register_io_read(avr, p->r_pin, avr_ioport_read, p);
 	avr_register_io_write(avr, p->r_pin, avr_ioport_pin_write, p);
+	if (p->r_pin < 64) // FIX ME
+		avr_register_io_bit_write(avr, p->r_pin, avr_ioport_pin_bit_write, p);
 	avr_register_io_write(avr, p->r_ddr, avr_ioport_ddr_write, p);
 	if (p->pcint.raised.reg) {
+		if (p->pcint.raised.reg < 64) {
+			avr_register_single_io_bit_write(avr, p->pcint.raised.reg,
+											 p->pcint.raised.bit,
+											 avr_ioport_flag_bit_write, p);
+		}
 		avr_register_io_write(avr, p->pcint.raised.reg,
-				      avr_ioport_flag_write, p);
+							  avr_ioport_flag_write, p);
 	}
 }

@@ -65,9 +65,8 @@ enum {
 	AVR_MMCU_TAG_VCD_SRAM_8,
 	AVR_MMCU_TAG_VCD_SRAM_16,
 	AVR_MMCU_TAG_VCD_IO_IRQ,
-#ifdef CONFIG_PULL_UPS
 	AVR_MMCU_TAG_PORT_EXTERNAL_PULL,
-#endif
+	AVR_MMCU_TAG_PORT_NO_PULL,
 };
 
 enum {
@@ -75,17 +74,29 @@ enum {
 	SIMAVR_CMD_VCD_START_TRACE,
 	SIMAVR_CMD_VCD_STOP_TRACE,
 	SIMAVR_CMD_UART_LOOPBACK,
+	SIMAVR_CMD_EXIT_CODE_0,
+	SIMAVR_CMD_EXIT_CODE_1,
 };
 
 #if __AVR__
-/*
+
+#define _MMCU_ __attribute__((section(".mmcu"))) __attribute__((used))
+
+/* This variable serves as an anchor to prevent the linker
+ * from discarding the .mmcu ELF section.  An option in the default
+ * compilation rule (Makefile.common) generates a reference to it.
+ */
+
+const uint8_t _MMCU_ __attribute__((weak)) _mmcu[] = { AVR_MMCU_TAG, 0 };
+
+ /*
  * WARNING. Due to newer GCC being stupid, they introduced a bug that
  * prevents us introducing variable length strings in the declaration
  * of structs. Worked for a million years, and no longer.
  * So the new method declares the string as fixed size, and the parser
  * is forced to skip the zeroes in padding. Dumbo.
  */
-#define _MMCU_ __attribute__((section(".mmcu"))) __attribute__((used))
+
 struct avr_mmcu_long_t {
 	uint8_t tag;
 	uint8_t len;
@@ -143,7 +154,7 @@ struct avr_mmcu_vcd_ioirq_t {
 	}
 
 #define AVR_MCU_BYTE(_tag, _val) \
-	const uint8_t _##_tag _MMCU_ = { _tag, 1, _val }
+	const uint8_t _##_tag[] _MMCU_ = { _tag, 1, _val }
 
 /*!
  * This Macro allows you to specify traces for the VCD file output
@@ -241,7 +252,7 @@ struct avr_mmcu_vcd_ioirq_t {
 		.len = sizeof(void *),\
 		.what = (void*)_register, \
 	}
-#ifdef CONFIG_PULL_UPS
+
 /*!
  * Allows the firmware to hint simavr as to wether there are external
  * pullups/down on PORT pins. It helps if the firmware uses "open drain"
@@ -255,7 +266,7 @@ struct avr_mmcu_vcd_ioirq_t {
 		(((unsigned long)((_port)&0xff) << 16) | \
 		((unsigned long)((_mask)&0xff) << 8) | \
 		((_val)&0xff)));
-#endif
+
 /*!
  * Add this port/pin to the VCD file. The syntax uses the name of the
  * port as a character, and not a pointer to a register.
@@ -323,13 +334,18 @@ struct avr_mmcu_vcd_ioirq_t {
 	AVR_MCU_LONG(AVR_MMCU_TAG_AREF, (_aref));
 
 /*!
- * This the has to be used if you want to add other tags to the .mmcu section
- * the _mmcu symbol is used as an anchor to make sure it stays linked in.
+ * This tag stops the simulator from guessing the state of pins with
+ * pull-ups enabled.
+ */
+
+#define AVR_MCU_PORT_NO_PULL AVR_MCU_BYTE(AVR_MMCU_TAG_PORT_NO_PULL, 0)
+
+/*!
+ * Sets the MCU type and speed.
  */
 #define AVR_MCU(_speed, _name) \
 	AVR_MCU_STRING(AVR_MMCU_TAG_NAME, _name);\
-	AVR_MCU_LONG(AVR_MMCU_TAG_FREQUENCY, _speed);\
-	const uint8_t _mmcu[2] _MMCU_ = { AVR_MMCU_TAG, 0 }
+	AVR_MCU_LONG(AVR_MMCU_TAG_FREQUENCY, _speed);
 
 /*
  * The following MAP macros where copied from

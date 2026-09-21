@@ -44,16 +44,32 @@ extern "C" {
 
 typedef uint32_t avr_flashaddr_t;
 
+/* Functions called when I/O registers are modified. */
+
 struct avr_t;
 typedef uint8_t (*avr_io_read_t)(
-		struct avr_t * avr,
-		avr_io_addr_t addr,
-		void * param);
+	struct avr_t * avr,
+	avr_io_addr_t addr,
+	void * param);
+
 typedef void (*avr_io_write_t)(
-		struct avr_t * avr,
-		avr_io_addr_t addr,
-		uint8_t v,
-		void * param);
+	struct avr_t * avr,
+	avr_io_addr_t addr,
+	uint8_t v,
+	void * param);
+
+typedef int (*avr_io_write_bit_t)(
+	struct avr_t * avr,
+	uint8_t bit,
+	uint8_t v,
+	void * param);
+
+/* Structure for storing bit-write callbacks. */
+
+struct bit_cb {
+    avr_io_write_bit_t  c;
+    void               *param;
+};
 
 enum {
 	// SREG bit indexes
@@ -71,6 +87,15 @@ enum {
 
 #define AVR_DATA_TO_IO(v) ((v) - avr->io_offset)
 #define AVR_IO_TO_DATA(v) ((v) + avr->io_offset)
+
+/**
+ * Structure to hold simulator options.
+ * The current set is kept in avr->options.
+ */
+
+struct simavr_options {
+	unsigned int no_pullups : 1;	// Disable all ioport pull-up behaviours.
+};
 
 /**
  * Logging macros and associated log levels.
@@ -232,6 +257,8 @@ typedef struct avr_t {
 	uint32_t 			sleep_usec;
 	uint64_t			time_base;	// for avr_get_time_stamp()
 
+	struct simavr_options options;	// Simulation options.
+
 	// called at init time
 	void (*init)(struct avr_t * avr);
 	// called at reset time
@@ -292,6 +319,13 @@ typedef struct avr_t {
 	 * allow support for bootloaders
 	 */
 	avr_flashaddr_t	reset_pc;
+
+	/* Callback for single-bit instructions (SBI, CBI) on the low 32
+	 * I/O registers.  If not set, or the function returns zero, a normal
+	 * 8-bit read-modify-write is done.
+	 */
+
+	struct bit_cb bit_io[32];
 
 	/* Callback when specific IO registers are read/written. */
 

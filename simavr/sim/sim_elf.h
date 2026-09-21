@@ -73,12 +73,10 @@ typedef struct elf_firmware_t {
 		char	name[64];
 	} trace[32];
 
-#ifdef CONFIG_PULL_UPS
 	struct {
 		char port;
 		uint8_t mask, value;
 	} external_state[8];
-#endif
 
 	// register to listen to for commands from the firmware
 	uint16_t	command_register_addr;
@@ -92,6 +90,8 @@ typedef struct elf_firmware_t {
 	uint32_t	highest_data_symbol;
 	char *		dwarf_file;	// Must be dynamically allocated.
 #endif
+	char *		file_name;	// Internal use.
+	struct simavr_options options;
 } elf_firmware_t ;
 
 /* The structure *firmware must be pre-initialised to zero, then optionally
@@ -107,6 +107,14 @@ void
 avr_load_firmware(
 	avr_t * avr,
 	elf_firmware_t * firmware);
+
+// Set MCU name from filename.
+
+void sim_default_mcu(elf_firmware_t * fp, const char * filename);
+
+/* Simplied setup. */
+
+avr_t *make_avr_from_file(const char *filename);
 
 // DWARF, not ELF, but a separate header for this would be silly.
 
