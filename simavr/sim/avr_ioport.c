@@ -260,7 +260,7 @@ avr_ioport_irq_notify(
 			 */
 
 			avr->data[p->r_port] = new_out;
-			irq->flags |= IRQ_FLAG_NTF_STOP; // Stop further processing of IRQ.
+//			irq->flags |= IRQ_FLAG_NTF_STOP; // Stop further processing of IRQ.
 			return;
 		}
 	} else {

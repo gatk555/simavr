@@ -92,8 +92,8 @@ int main(void)
     PORTB = 0;                      // Two interrupts.
     go();
 
-    /* Final check: writing to GPIOR1 should have had not effect as the
-     * handler did not writr thr passed value.
+    /* Final check: writing to GPIOR1 should have had no effect as the
+     * handler did not write the passed value.
      */
 
     if (GPIOR1)

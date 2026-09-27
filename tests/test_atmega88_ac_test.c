@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 #include "tests.h"
 #include "avr_acomp.h"
 
@@ -27,13 +28,19 @@ int main(int argc, char **argv) {
 		"Check analog comparator triggering timer capture\r\n"
 		"YY";
 	static const char *expected_inputs =
-		"100.101.102.103.104.105.106.107.108.101.111."
+		"101.102.103.104.105.106.107.108.101.111."
 		"110.111.112.113.114.115.116.117.118.111."
 		"000.111.112.111.112.111.112.111.112.111.112.111.";
 	const avr_pin_info_t *pip;
 
 	tests_init(argc, argv);
 	avr_t *avr = tests_init_avr("atmega88_ac_test.axf");
+
+	// Monitor the input state.
+
+	avr_irq_register_notify(avr_io_getirq(avr, AVR_IOCTL_ACOMP_GETIRQ,
+										  ACOMP_IRQ_INPUT_STATE),
+							input_monitor, (void *)0);
 
 	// Test the pin information ioctl.
 
@@ -43,12 +50,6 @@ int main(int argc, char **argv) {
 	    pip[1].port_letter != 'D' || pip[1].pin != 7) {
 		fail("AVR_IOCTL_ACOMP_GETPINS failed.\n");
 	}
-
-        // Monitor the input state.
-
-        avr_irq_register_notify(avr_io_getirq(avr, AVR_IOCTL_ACOMP_GETIRQ,
-					      ACOMP_IRQ_INPUT_STATE),
-				input_monitor, (void *)0);
 
 	// set voltages
 	avr_raise_irq(avr_io_getirq(avr, AVR_IOCTL_ACOMP_GETIRQ, ACOMP_IRQ_AIN0), 2000);

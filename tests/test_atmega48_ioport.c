@@ -114,7 +114,7 @@ static void reg_read(struct avr_irq_t *irq, uint32_t value, void *param)
 /* This string should be sent by the firmware. */
 
 static const char *expected =
-    "P<2A P<30 F<03 I<20 P<20 J<03 J<00 P<28 | K | P<B8 ";
+    "P<2A P<30 F<01 I<20 P<20 J<03 J<00 P<28 | K | P<B8 ";
 
 /* This string is expected in variable log. */
 

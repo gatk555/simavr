@@ -82,18 +82,11 @@ int main()
 	EICRA = 3;
 	EIMSK = 1;
 
-#ifdef NOTYET
-        /* Clear external interrupt flags, but INT0 (PD3) will
-         * immediately reset, as the pin is low.
-         */
-
-        EIFR = 0xff;
-#endif
 	/* Turn off pin 4, signal the controlling program to raise pin 2. */
 
 	PORTD = 0xe0;
 
-	/* Verify the interrupt flag is set. Result should be 3. */
+	/* Verify the interrupt flag is set. Result should be 1. */
 
 	printf("F<%02X ", EIFR);
 

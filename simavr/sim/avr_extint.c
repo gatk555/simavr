@@ -1,4 +1,3 @@
-/* -*- mode: C; eval: (setq c-basic-offset 8); -*- (emacs magic) */
 /*
 	avr_extint.c
 
@@ -32,14 +31,14 @@
 
 static unsigned int avr_extint_get_bit(struct avr_eint_i_t * ip)
 {
-        char               port; 
+	char               port;
 	avr_ioport_state_t iostate;
 
-        port = ip->port_ioctl & 0xFF;
+	port = ip->port_ioctl & 0xFF;
 	if (avr_ioctl(ip->owner->io.avr, AVR_IOCTL_IOPORT_GETSTATE(port),
                       &iostate) < 0) {
 		return 1;
-        }
+	}
 	return ((iostate.ddr >> ip->port_pin) & 1) ?
 		   ((iostate.port >> ip->port_pin) & 1) :
 		   ((iostate.pin >> ip->port_pin) & 1);
@@ -53,10 +52,10 @@ static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value,
 	avr_extint_t        * p = (avr_extint_t *)param;
 	avr_t               * avr = p->io.avr;
 	struct avr_eint_i_t * ip = p->eint + irq->irq;
-        uint8_t               old_value;
+	uint8_t               old_value;
 
-        value &= 0xff;
-        old_value = ip->port_irq->value & 0xff;
+	value &= 0xff;
+	old_value = ip->port_irq->value & 0xff;
 
 	int up = !old_value && value;
 	int down = old_value && !value;
@@ -72,7 +71,7 @@ static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value,
 	//	 irq->irq, old_value, value, mode);
 	switch (mode) {
 		case 0: // Level triggered (low level) interrupt.
-                        // FIXME? avr_extint_test_level(p->eint + irq->irq);
+			// FIXME? avr_extint_test_level(p->eint + irq->irq);
 			if (down)
 				avr_raise_level(avr, &ip->vector);
 			break;
@@ -95,17 +94,17 @@ static void avr_extint_irq_notify(struct avr_irq_t * irq, uint32_t value,
 
 static void avr_extint_LT_enabled(struct avr_eint_i_t * ip)
 {
-        avr_t *avr;
+	avr_t *avr;
 
-        // Clear any pending interrupt.
+	// Clear any pending interrupt.
 
-        avr = ip->owner->io.avr;
+	avr = ip->owner->io.avr;
 	avr_clear_interrupt(avr, &ip->vector);
 
 	// Check the pin.
 
-        if (avr_extint_get_bit(ip) == 0)
-                avr_raise_level(avr, &ip->vector);
+	if (avr_extint_get_bit(ip) == 0)
+		avr_raise_level(avr, &ip->vector);
 }
 
 /* An enable or control bit has changed. */
@@ -119,38 +118,35 @@ static void avr_exint_enable_change(struct avr_t  * avr,
 
 	avr_core_watch_write(avr, addr, v);
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-                uint8_t              enable;
-                struct avr_eint_i_t * ip = p->eint + i;
+		uint8_t              enable;
+		struct avr_eint_i_t * ip = p->eint + i;
 
 		if (!ip->port_ioctl)
-                        return;
-                enable = avr_regbit_from_value(avr, ip->vector.enable, v);
-                if (enable != ip->previous_enable) {
-			//printf("i = %d enable %d->%d\n",
-			//	 i, ip->previous_enable, enable);
-                        if (enable) {
-                                // Watch the pin.
+			return;
+		enable = avr_regbit_from_value(avr, ip->vector.enable, v);
+		if (enable != ip->previous_enable) {
+			//printf("i = %d enable %d->%d\n", i, ip->previous_enable, enable);
+			if (enable) {
+				// Watch the pin.
 
-				//printf("i = %d connecting irq %d\n",
-				//	 i, ip->port_irq->irq);
-                                avr_connect_irq(ip->port_irq, p->io.irq + i);
-                                if (ip->previous_mode == 0)
-                                        avr_extint_LT_enabled(ip);
-                        } else {
-                                // Forget the pin.
+				avr_connect_irq(ip->port_irq, p->io.irq + i);
+				if (ip->previous_mode == 0)
+					avr_extint_LT_enabled(ip);
+			} else {
+				// Forget the pin.
 
-                                avr_unconnect_irq(ip->port_irq, p->io.irq + i);
+				avr_unconnect_irq(ip->port_irq, p->io.irq + i);
 
 				// Forget any active interrupt.
 
-                                if (ip->previous_mode == 0)
+				if (ip->previous_mode == 0)
 					avr_clear_level(avr, &ip->vector);
 				else
 					avr_clear_interrupt(avr, &ip->vector);
 			}
-                }
-                ip->previous_enable = enable;
-        }
+		}
+		ip->previous_enable = enable;
+	}
 }
 
 static void avr_exint_control_change(struct avr_t  * avr,
@@ -162,18 +158,17 @@ static void avr_exint_control_change(struct avr_t  * avr,
 
 	avr_core_watch_write(avr, addr, v);
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-                uint8_t               mode;
-                struct avr_eint_i_t * ip = p->eint + i;
+		uint8_t               mode;
+		struct avr_eint_i_t * ip = p->eint + i;
 
 		if (!ip->port_ioctl)
-                        return;
-                mode = avr_regbit_from_value(avr, ip->isc[0], v) +
-                            (avr_regbit_from_value(avr, ip->isc[1], v) << 1);
-                if (!ip->isc[1].reg)
-                        mode += 2;
-                if (mode != ip->previous_mode) {
-			//printf("i = %d mode %d->%d\n",
-			//	 i, ip->previous_mode, mode);
+			return;
+		mode = avr_regbit_from_value(avr, ip->isc[0], v) +
+				(avr_regbit_from_value(avr, ip->isc[1], v) << 1);
+		if (!ip->isc[1].reg)
+			mode += 2;
+		if (mode != ip->previous_mode) {
+			//printf("i = %d mode %d->%d\n", i, ip->previous_mode, mode);
 			if (ip->previous_enable) {
 				if (ip->previous_mode == 0) {
 					// Forget the interrupt
@@ -182,14 +177,14 @@ static void avr_exint_control_change(struct avr_t  * avr,
 				} else if (mode == 0) {
 					avr_extint_LT_enabled(ip);
 				}
-                        } else if (mode == 0) {
+			} else if (mode == 0) {
 				// Forget any pending interrupt.
 
 				avr_clear_interrupt(avr, &ip->vector);
 			}
-                }
-                ip->previous_mode = mode;
-        }
+		}
+		ip->previous_mode = mode;
+	}
 }
 
 static void avr_extint_reset(avr_io_t * port)
@@ -197,16 +192,14 @@ static void avr_extint_reset(avr_io_t * port)
 	avr_extint_t * p = (avr_extint_t *)port;
 
 	for (int i = 0; i < EXTINT_COUNT; i++) {
-                struct avr_eint_i_t * ip = p->eint + i;
+		struct avr_eint_i_t * ip = p->eint + i;
 
 		if (ip->port_ioctl) {
-                        avr_irq_register_notify(p->io.irq + i,
-                                                avr_extint_irq_notify, p);
-                        ip->port_irq = avr_io_getirq(p->io.avr,
-                                                     ip->port_ioctl,
-                                                     ip->port_pin);
+			avr_irq_register_notify(p->io.irq + i, avr_extint_irq_notify, p);
+			ip->port_irq = avr_io_getirq(p->io.avr,
+										 ip->port_ioctl, ip->port_pin);
 			if (!ip->isc[1].reg)
-                                ip->previous_mode = 2;
+				ip->previous_mode = 2;
 		}
 	}
 }

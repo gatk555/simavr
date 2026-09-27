@@ -114,19 +114,20 @@ int main()
 
 	/* Test the level-triggered interupt.  It can be started
 	 * by a pin-value change or by writing to either of EICRA and EIMSK.
+	 * INT0 is on PD2, INT1 on PD3
 	 * PORTD/3 is already 0 as are the control bits in EICRA.
 	 * So this should cause one interrupt.
 	 */
 
 	level_limit = 4;
-	EIMSK = 2;
+	EIMSK = 2;      // Interrupt: "L0".
 	cli();
 	EICRA = 1 << 2; // Either edge.
 	sei();
-	PORTD = 8;      // Interrupt.
+	PORTD = 8;      // Interrupt: "L1".
 	EICRA = 0;
 	level_limit = 5;
-	PORTD = 0;      // Multiple interrupts.
+	PORTD = 0;      // Multiple interrupts: "L0".
 	PORTB = 0;      // Waste cycles.
 	PORTC = 0;
 	PORTB = 1;
